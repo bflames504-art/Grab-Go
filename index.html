@@ -914,6 +914,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
     <div style="display:grid;gap:12px">
       <span class="wordmark" aria-hidden="true" style="font-size:20px;width:max-content">Grab n' Go</span>
       <p>Grab n' Go is a student venture concept created by Kaitlyn Michael and Team 2 for an entrepreneurship course. It is not affiliated with or endorsed by Coastal Carolina University or its dining services. This site is a demo: no orders are fulfilled and no payments are taken. Nutrition values are targets for concept recipes.</p>
+      <p id="privacy-note" hidden>To plan our launch, this site records anonymous visits and demo order activity. Your email is collected only if you submit the reservation form, and names and room numbers never leave your device.</p>
     </div>
     <div class="theme-ctl">
       <span class="label" id="theme-label">Theme</span>
@@ -960,6 +961,8 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
 
 <script>
 const TALLY_FORM_URL = "";
+// Paste your Google Apps Script web app URL here to send responses to your Google Sheet.
+const DATA_ENDPOINT = "";
 
 /* ================= data ================= */
 const STORE_KEY = "grabngo-demo-v1";
@@ -1108,6 +1111,8 @@ function defaults() {
     orders: [],
     signup: null,
     theme: "auto",
+    vid: "",
+    outbox: [],
     details: { name: "", hall: "", room: "", pay: "dd" }
   };
 }
@@ -1119,7 +1124,10 @@ function hydrate(src) {
   s.wallet = { ...d.wallet, ...(src.wallet || {}) };
   s.details = { ...d.details, ...(src.details || {}) };
   s.cart = Array.isArray(src.cart) ? src.cart.filter(l => l && ITEM[l.id] && l.qty > 0) : [];
-  s.orders = Array.isArray(src.orders) ? src.orders : [];
+  s.orders = Array.isArray(src.orders) ? src.orders.filter(o => o && o.no && o.totals && Array.isArray(o.items) && o.pay) : [];
+  s.outbox = Array.isArray(src.outbox) ? src.outbox.slice(-200) : [];
+  s.vid = typeof src.vid === "string" ? src.vid.slice(0, 40) : "";
+  if (!Number.isFinite(s.wallet.dd) || !Number.isFinite(s.wallet.swipes)) s.wallet = { ...d.wallet };
   if (!LOC[s.location]) s.location = d.location;
   if (!["pickup", "delivery"].includes(s.fulfil)) s.fulfil = "pickup";
   if (!["dd", "swipe", "card"].includes(s.details.pay)) s.details.pay = "dd";
@@ -1131,6 +1139,44 @@ function loadStored() {
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable: keep working in memory */ }
 }
+
+/* ================= data collection =================
+   Sends events to the team's Google Sheet (see DATA_ENDPOINT). Nothing is sent when it is empty.
+   Visits and activity are anonymous; an email is only sent from the reservation form.
+   Order names and room numbers are never sent. */
+const optedOut = () => navigator.doNotTrack === "1" || navigator.globalPrivacyControl === true;
+function newId() {
+  try { return crypto.randomUUID(); } catch (e) { return "v-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10); }
+}
+function track(type, data = {}, opts = {}) {
+  if (!DATA_ENDPOINT) return;
+  if (!opts.explicit && optedOut()) return;
+  if (!state.vid) state.vid = newId();
+  state.outbox.push({ type, ts: new Date().toISOString(), vid: state.vid, device: window.innerWidth < 720 ? "phone" : "desktop", ...data });
+  if (state.outbox.length > 200) state.outbox = state.outbox.slice(-200);
+  save();
+  flushOutbox();
+}
+let flushing = false;
+async function flushOutbox() {
+  if (flushing || !DATA_ENDPOINT || !state.outbox.length) return;
+  flushing = true;
+  try {
+    while (state.outbox.length) {
+      const batch = state.outbox.slice(0, 20);
+      await fetch(DATA_ENDPOINT, { method: "POST", mode: "no-cors", keepalive: true, headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ events: batch }) });
+      state.outbox = state.outbox.filter(ev => !batch.includes(ev));
+      if (batch.some(ev => ev.type === "reservation") && state.signup && !state.signup.sent) {
+        state.signup.sent = true;
+        save();
+        if (!ui.signupEditing) renderSignup();
+      }
+      save();
+    }
+  } catch (e) { /* offline or blocked: keep the queue and try again later */ }
+  flushing = false;
+}
+window.addEventListener("online", flushOutbox);
 
 const ui = {
   view: "home",
@@ -1169,6 +1215,7 @@ const unitPrice = (item, dbl) => item.price + (dbl && item.boost ? DOUBLE_PRICE 
 const lineKey = (id, dbl, base) => `${id}|${dbl ? 1 : 0}|${base || "std"}`;
 function optsText(line) {
   const it = ITEM[line.id], out = [];
+  if (!it) return "";
   if (line.dbl && it.boost) out.push(`Double protein (${it.boost.label.toLowerCase()})`);
   if (line.base && line.base !== "std") out.push(BASES[line.base].label);
   return out.join(", ");
@@ -1533,7 +1580,7 @@ function renderSignup() {
     const s = state.signup;
     const lbl = (k, v) => (PLEDGE_Q[k].opts.find(o => o[0] === v) || [, "Not answered"])[1];
     el.innerHTML = `${head}
-      <p class="signup-msg ok" id="signup-msg" role="status">${ic("check", "ic-sm")} Saved on this device. This demo doesn't send your answers anywhere yet.</p>
+      <p class="signup-msg ok" id="signup-msg" role="status">${ic("check", "ic-sm")} ${!DATA_ENDPOINT ? "Saved on this device. This demo doesn't send your answers anywhere yet." : s.sent ? "You're on the list. We'll email you when Grab n' Go launches." : "Saved. We'll send your answers as soon as you're connected."}</p>
       <dl class="kv" style="max-width:480px">
         <dt>Email</dt><dd>${esc(s.email)}</dd>
         <dt>How you'd pay</dt><dd>${esc(lbl("pay", s.pay))}</dd>
@@ -1556,7 +1603,7 @@ function renderSignup() {
       ${pledgeRadios("max", true)}
       ${pledgeRadios("get", true)}
       <div><button class="btn btn-primary" type="submit" id="pledge-submit">Reserve my first meal</button></div>
-      <p class="hint">Answers are kept on this device only. Nothing is charged.</p>
+      <p class="hint">${DATA_ENDPOINT ? "Your answers go to the Grab n' Go team. We only use your email for launch updates. Nothing is charged." : "Answers are kept on this device only. Nothing is charged."}</p>
     </form>`;
 }
 function submitPledge(form) {
@@ -1575,10 +1622,12 @@ function submitPledge(form) {
     if (first) first.focus();
     return;
   }
-  state.signup = { email, pay: draft.pay, max: draft.max || null, get: draft.get || null, ts: Date.now() };
+  state.signup = { email, pay: draft.pay, max: draft.max || null, get: draft.get || null, ts: Date.now(), sent: false };
   ui.signupDraft = {}; ui.signupErrors = {}; ui.signupEditing = false;
   save();
   renderSignup();
+  const lbl = (k, v) => v ? (PLEDGE_Q[k].opts.find(o => o[0] === v) || [, ""])[1] : "";
+  track("reservation", { email, pay: lbl("pay", draft.pay), max: lbl("max", draft.max), get: lbl("get", draft.get) }, { explicit: true });
   const msg = $("#signup-msg"); if (msg) { msg.tabIndex = -1; msg.focus(); }
 }
 
@@ -1720,6 +1769,7 @@ function addToCart(id, dbl = false, base = "std", qty = 1) {
   cartChanged(`Added ${it.name}. Order has ${plural(t.count, "item")}, ${money(t.subtotal)}.`);
   toast(`Added ${it.name}`);
   bumpCount();
+  track("activity", { action: "add to order", item: it.name, detail: optsText({ id, dbl: !!dbl, base }) });
 }
 function changeQty(key, delta) {
   const line = state.cart.find(l => l.key === key); if (!line) return;
@@ -1770,6 +1820,7 @@ function setupDialog(d, onClose) {
 function openSheet(id, fromTile) {
   const it = ITEM[id]; if (!it) return;
   ui.sheet = { id, dbl: false, base: "std", qty: 1 };
+  track("activity", { action: "view item", item: it.name });
   const art = fromTile ? fromTile.querySelector(".tile-art") : null;
   const doOpen = () => {
     if (art) art.style.viewTransitionName = "";
@@ -2042,6 +2093,12 @@ function placeOrder() {
     state.wallet.swipes -= p.swipes;
   }
   state.orders.unshift(order);
+  track("order", {
+    order: no, items: itemsSummary(order), count: t.count, total: (t.subtotal / 100).toFixed(2),
+    pay: PAY_LABEL[p.method], swipes: p.method === "card" ? 0 : p.swipes, dining_dollars: p.method === "card" ? "0.00" : (p.dd / 100).toFixed(2),
+    fulfil: order.fulfil, spot: LOC[order.location].name, time: order.slotLabel,
+    double_protein: order.items.filter(l => l.dbl).reduce((n, l) => n + l.qty, 0), cal: t.cal, protein: t.protein
+  });
   state.cart = [];
   ui.lastOrderNo = no;
   save();
@@ -2136,7 +2193,14 @@ function orderAgain(no) {
 
 /* ================= routing, theme ================= */
 const VIEWS = ["home", "menu", "orders", "research"];
+const PAGE_NAME = { home: "Home", menu: "Menu", orders: "My orders", research: "Why we built it" };
 function showView(v, userNav) {
+  if (ui.trackedView !== v) {
+    ui.trackedView = v;
+    let ref = "";
+    try { ref = document.referrer ? new URL(document.referrer).hostname : ""; } catch (e) { ref = ""; }
+    track("visit", { page: PAGE_NAME[v], referrer: ref });
+  }
   ui.view = v;
   $$("[data-view]").forEach(s => { s.hidden = s.dataset.view !== v; });
   $$("[data-nav]").forEach(a => { if (a.dataset.nav === v) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
@@ -2204,12 +2268,12 @@ document.addEventListener("click", e => {
       addToCart(s.id, s.dbl, s.base, s.qty);
       break;
     }
-    case "to-details": ui.errors = {}; gotoStep("details"); break;
+    case "to-details": ui.errors = {}; gotoStep("details"); track("activity", { action: "start checkout", detail: money(cartTotals().subtotal) }); break;
     case "goto-step": ui.errors = {}; gotoStep(v); break;
     case "place-order": placeOrder(); break;
     case "wyr": {
       const o = state.orders.find(x => x.no === ui.lastOrderNo);
-      if (o) { o.wyr = v; save(); withFocus(renderDrawer); }
+      if (o) { o.wyr = v; save(); withFocus(renderDrawer); track("order_intent", { order: o.no, answer: WYR[v] }); }
       break;
     }
     case "order-again": orderAgain(t.dataset.no); break;
@@ -2267,6 +2331,8 @@ function start(data) {
   renderSignup();
   renderCartBits();
   route(false);
+  const pn = $("#privacy-note"); if (pn) pn.hidden = !DATA_ENDPOINT;
+  flushOutbox();
   if (!booted) {
     booted = true;
     setInterval(tickOrders, 1000);
