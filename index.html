@@ -1802,7 +1802,7 @@ function renderSignup() {
       ${pledgeRadios("max", true)}
       ${pledgeRadios("get", true)}
       <div><button class="btn btn-primary" type="submit" id="pledge-submit">${first && meals.length === 1 ? "Reserve my first meal, save 5%" : `Reserve my ${plural(meals.length, "meal")}, save ${pct}%`}</button>${state.signup ? ` <button class="btn btn-quiet" type="button" id="pledge-cancel-edit" data-action="pledge-cancel-edit">Never mind</button>` : ""}</div>
-      <p class="hint">${DATA_ENDPOINT ? "Your answers go to the Grab n' Go team. We only use your email for launch updates. Nothing is charged, and you can cancel a reserved meal any time." : "Answers are kept on this device only. Nothing is charged."}</p>
+      <p class="hint">${DATA_ENDPOINT ? "Your answers go to the Grab n' Go team. We only use your email for launch updates. Nothing is charged. You can cancel a reserved meal any time, and the discount adjusts to the meals you keep." : "Answers are kept on this device only. Nothing is charged."}</p>
     </form>`;
 }
 function submitPledge(form) {
@@ -1849,11 +1849,17 @@ function submitPledge(form) {
 function cancelReserved(key) {
   const m = state.reserved.find(x => x.key === key); if (!m || m.cancelled) return;
   m.cancelled = true;
+  // The discount follows the meals still planned in that reservation.
+  const left = state.reserved.filter(x => x.rid === m.rid && !x.cancelled);
+  const was = m.disc || 0, nowDisc = planDiscount(left.length);
+  left.forEach(x => { x.disc = nowDisc; });
   save();
   if (!ui.signupEditing) renderSignup();
   if (ui.view === "orders") renderOrders();
-  track("meal_cancel", { meal_id: m.key, reservation: m.rid, item: ITEM[m.item].name }, { explicit: true });
-  announce(`Cancelled ${ITEM[m.item].name} on ${fmtDate(dateFromIso(m.date))}.`);
+  track("meal_cancel", { meal_id: m.key, reservation: m.rid, item: ITEM[m.item].name, discount: nowDisc + "%" }, { explicit: true });
+  const note = left.length && nowDisc < was ? ` Your discount on the rest of that plan is now ${nowDisc}%.` : "";
+  announce(`Cancelled ${ITEM[m.item].name} on ${fmtDate(dateFromIso(m.date))}.${note}`);
+  if (note) toast(`Discount on that plan is now ${nowDisc}%`);
 }
 
 /* ================= menu ================= */
