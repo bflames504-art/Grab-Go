@@ -294,7 +294,10 @@ h1:focus { outline: none; }
 @keyframes mq { to { transform: translateX(-50%); } }
 
 /* home sections */
-.spots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.spots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 1080px) { .spots { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.spot { display: flex; flex-direction: column; }
+.spot > .btn { margin-top: auto; }
 .spot { padding: 22px; display: grid; gap: 14px; align-content: start; }
 .spot-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .spot h3 { font-size: 24px; }
@@ -713,8 +716,8 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
   <div class="band panel">
     <section class="wrap" aria-labelledby="spots-title">
       <p class="eyebrow">Pickup spots</p>
-      <h2 class="section-title" id="spots-title">Three counters on campus</h2>
-      <p class="section-lede">Planned hours are the same at each spot, every day.</p>
+      <h2 class="section-title" id="spots-title">Four places to grab it</h2>
+      <p class="section-lede">Our own counter, plus pickup inside three dining locations. Each spot shows open or closed for the current campus time (Eastern).</p>
       <div class="spots" id="spots"></div>
     </section>
   </div>
@@ -725,7 +728,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
       <h2 class="section-title" id="how-title">About a minute, start to finish</h2>
       <p class="section-lede">Three steps between class and your next thing.</p>
       <ol class="steps-list">
-        <li class="card lift"><span class="step-num">1</span><h3>Pick a spot and a time</h3><p class="muted">Choose Cino, Hicks or Chauncey's Choice, or delivery to your dorm. Take the next slot or schedule one later.</p></li>
+        <li class="card lift"><span class="step-num">1</span><h3>Pick a spot and a time</h3><p class="muted">Choose our own counter, Cino, Hicks or Chauncey's Choice, or delivery to your dorm. Take the next slot or schedule one later.</p></li>
         <li class="card lift"><span class="step-num">2</span><h3>Choose your meal and see the label</h3><p class="muted">Every item shows calories, protein, carbs and fat. Add double protein or swap the base and the label updates.</p></li>
         <li class="card lift"><span class="step-num">3</span><h3>Pay, then grab it or get it delivered</h3><p class="muted">Built for Dining Dollars and meal swipes. Pick it up at the counter, or get it delivered to your room.</p></li>
       </ol>
@@ -970,17 +973,33 @@ const START_DD = 15000;      // cents
 const START_SWIPES = 10;
 const DOUBLE_PRICE = 300;    // cents
 
+// Hours are in campus time (Eastern), minutes from midnight. Index 0 = Sunday ... 6 = Saturday.
+// open: when the location is open. lunch / dinner: when those menus are served there.
+const H = (a, b) => [Math.round(a * 60), Math.round(b * 60)];
+const week = (sun, mon, tue, wed, thu, fri, sat) => [sun, mon, tue, wed, thu, fri, sat];
+const HALL_STD = {
+  open:   week(H(9, 21), H(7, 21), H(7, 21), H(7, 21), H(7, 21), H(7, 21), H(9, 21)),
+  lunch:  week(H(12, 16.5), H(11, 16.5), H(11, 16.5), H(11, 16.5), H(11, 16.5), H(11, 16.5), H(12, 16.5)),
+  dinner: week(H(17, 21), H(17, 21), H(17, 21), H(17, 21), H(17, 21), H(17, 21), H(17, 21)),
+  summary: "Mon to Fri 7:00 am to 9:00 pm · Sat and Sun 9:00 am to 9:00 pm"
+};
 const LOCATIONS = [
-  { id: "cino", name: "Cino" },
-  { id: "hicks", name: "Hicks" },
-  { id: "chaunceys", name: "Chauncey's Choice" }
+  { id: "grabngo", name: "Grab n' Go", note: "Our own counter",
+    open:   week(H(11, 20), H(11, 20), H(11, 20), H(11, 20), H(11, 20), H(11, 20), H(11, 20)),
+    lunch:  week(H(11, 17), H(11, 17), H(11, 17), H(11, 17), H(11, 17), H(11, 17), H(11, 17)),
+    dinner: week(H(17, 20), H(17, 20), H(17, 20), H(17, 20), H(17, 20), H(17, 20), H(17, 20)),
+    summary: "Every day 11:00 am to 8:00 pm" },
+  { id: "cino", name: "Cino", note: "Inside CINO Grille", ...HALL_STD },
+  { id: "hicks", name: "Hicks", note: "Inside Hicks Dining Hall", ...HALL_STD },
+  { id: "chaunceys", name: "Chauncey's Choice", note: "Inside Chauncey's Choice",
+    open:   week(null, H(7.5, 20), H(7.5, 20), H(7.5, 20), H(7.5, 20), H(7.5, 14.5), null),
+    lunch:  week(null, H(11, 16.5), H(11, 16.5), H(11, 16.5), H(11, 16.5), H(11, 14.5), null),
+    dinner: week(null, H(17, 20), H(17, 20), H(17, 20), H(17, 20), null, null),
+    summary: "Mon to Thu 7:30 am to 8:00 pm · Fri 7:30 am to 2:30 pm · closed Sat and Sun" }
 ];
 const LOC = Object.fromEntries(LOCATIONS.map(l => [l.id, l]));
-// Planned hours, minutes from midnight, every day, all three spots
-const WINDOWS = [
-  { period: "lunch", start: 11 * 60, end: 14 * 60 },
-  { period: "dinner", start: 17 * 60, end: 20 * 60 }
-];
+const CAMPUS_TZ = "America/New_York";
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const BASES = {
   std: { label: "As designed", cal: 0, protein: 0, carbs: 0 },
   quinoa: { label: "Swap to quinoa", cal: 60, protein: 3, carbs: 10, ing: "quinoa" },
@@ -1104,7 +1123,7 @@ function announce(msg) {
 function defaults() {
   return {
     cart: [],
-    location: "cino",
+    location: "grabngo",
     fulfil: "pickup",
     slot: "asap",
     wallet: { dd: START_DD, swipes: START_SWIPES },
@@ -1180,7 +1199,7 @@ window.addEventListener("online", flushOutbox);
 
 const ui = {
   view: "home",
-  tab: new Date().getHours() < 15 ? "lunch" : "dinner",
+  tab: (() => { try { return Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hourCycle: "h23", hour: "numeric" }).format(new Date())) % 24 < 15; } catch (e) { return new Date().getHours() < 15; } })() ? "lunch" : "dinner",
   diets: new Set(),
   q: "",
   sort: "menu",
@@ -1269,35 +1288,59 @@ function payText(p) {
 }
 
 /* ================= time + slots ================= */
+// All opening-hours maths runs on campus wall-clock time, wherever the visitor is.
+function campusNow(real = new Date()) {
+  try {
+    const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: CAMPUS_TZ, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" }).formatToParts(real).map(x => [x.type, x.value]));
+    return new Date(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  } catch (e) { return new Date(real.getTime()); }
+}
 const dayAt = (now, offset, minutes) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, 0, minutes);
 const minutesOf = d => d.getHours() * 60 + d.getMinutes();
-function currentWindow(now = new Date()) {
-  const m = minutesOf(now);
-  return WINDOWS.find(w => m >= w.start && m < w.end) || null;
+const dowAt = (now, offset = 0) => (now.getDay() + offset) % 7;
+const curLoc = () => LOC[state.location] || LOCATIONS[0];
+const dayLabel = (now, d) => d === 0 ? "Today" : d === 1 ? "Tomorrow" : DAY_NAMES[dowAt(now, d)];
+function mealWindows(loc, dow) {
+  return ["lunch", "dinner"].filter(p => loc[p][dow]).map(p => ({ period: p, start: loc[p][dow][0], end: loc[p][dow][1] }));
 }
-function openStatus(now = new Date()) {
-  const w = currentWindow(now);
-  if (w) return { open: true, text: `Open until ${fmtMin(w.end)}` };
-  const m = minutesOf(now);
-  const next = WINDOWS.find(x => x.start > m);
-  return next ? { open: false, text: `Closed, opens ${fmtMin(next.start)}` } : { open: false, text: `Closed, opens ${fmtMin(WINDOWS[0].start)} tomorrow` };
+function openStatus(loc = curLoc(), now = campusNow()) {
+  const m = minutesOf(now), today = loc.open[dowAt(now)];
+  if (today && m >= today[0] && m < today[1]) return { open: true, text: `Open until ${fmtMin(today[1])}` };
+  if (today && m < today[0]) return { open: false, text: `Closed, opens ${fmtMin(today[0])}` };
+  for (let d = 1; d <= 7; d++) {
+    const h = loc.open[dowAt(now, d)];
+    if (h) return { open: false, text: `Closed, opens ${fmtMin(h[0])} ${d === 1 ? "tomorrow" : DAY_NAMES[dowAt(now, d)]}` };
+  }
+  return { open: false, text: "Closed" };
 }
-const hoursText = () => WINDOWS.map(w => `${fmtMin(w.start)} to ${fmtMin(w.end)}`).join(", ");
-function allSlots(now = new Date(), fulfil = state.fulfil) {
+function hoursText(loc = curLoc(), now = campusNow()) {
+  const h = loc.open[dowAt(now)];
+  return h ? `${fmtMin(h[0])} to ${fmtMin(h[1])}` : "closed today";
+}
+function todayLines(loc, now = campusNow()) {
+  const dow = dowAt(now), h = loc.open[dow];
+  if (!h) return ["Closed today"];
+  return [`Open ${fmtMin(h[0])} to ${fmtMin(h[1])}`].concat(mealWindows(loc, dow).map(w => `${w.period === "lunch" ? "Lunch" : "Dinner"} ${fmtMin(w.start)} to ${fmtMin(w.end)}`));
+}
+function allSlots(now = campusNow(), fulfil = state.fulfil, loc = curLoc()) {
   const lead = 15 + (fulfil === "delivery" ? 15 : 0);
   const earliest = now.getTime() + lead * 60000;
   const out = [];
-  const w = currentWindow(now);
-  if (w && earliest <= dayAt(now, 0, w.end).getTime()) {
-    out.push({ value: "asap", t: earliest, period: w.period, day: 0, label: `ASAP, about ${fmtTime(new Date(earliest))}` });
+  const m = minutesOf(now), today = loc.open[dowAt(now)];
+  if (today && m >= today[0] && m < today[1] && earliest <= dayAt(now, 0, today[1]).getTime()) {
+    const w = mealWindows(loc, dowAt(now)).find(x => m >= x.start && m < x.end);
+    out.push({ value: "asap", t: earliest, period: w ? w.period : "any", day: 0, label: `ASAP, about ${fmtTime(new Date(earliest))}` });
   }
-  for (const d of [0, 1]) {
-    for (const win of WINDOWS) {
-      for (let m = win.start; m < win.end; m += 15) {
-        const t = dayAt(now, d, m).getTime();
-        if (t >= earliest) out.push({ value: String(t), t, period: win.period, day: d, label: `${d ? "Tomorrow" : "Today"}, ${fmtMin(m)}` });
+  let daysWithSlots = 0;
+  for (let d = 0; d <= 7 && daysWithSlots < 2; d++) {
+    let any = false;
+    for (const win of mealWindows(loc, dowAt(now, d))) {
+      for (let mm = win.start; mm < win.end; mm += 15) {
+        const t = dayAt(now, d, mm).getTime();
+        if (t >= earliest) { any = true; out.push({ value: String(t), t, period: win.period, day: d, dayName: dayLabel(now, d), label: `${dayLabel(now, d)}, ${fmtMin(mm)}` }); }
       }
     }
+    if (any) daysWithSlots++;
   }
   return out;
 }
@@ -1307,7 +1350,7 @@ function neededPeriods(lines = state.cart) {
 function validSlots(lines = state.cart, fulfil = state.fulfil) {
   const need = neededPeriods(lines);
   if (need.size > 1) return [];
-  const slots = allSlots(new Date(), fulfil);
+  const slots = allSlots(campusNow(), fulfil);
   if (need.size === 0) return slots;
   const p = [...need][0];
   return slots.filter(s => s.period === p);
@@ -1323,7 +1366,7 @@ function slotOptions(list, selected) {
   if (!list.length) return `<option value="">No time fits every item</option>`;
   const groups = [];
   for (const s of list) {
-    const g = s.value === "asap" ? "Now" : `${s.day ? "Tomorrow" : "Today"}, ${s.period}`;
+    const g = s.value === "asap" ? "Now" : `${s.dayName}, ${s.period}`;
     let grp = groups.find(x => x.g === g);
     if (!grp) { grp = { g, items: [] }; groups.push(grp); }
     grp.items.push(s);
@@ -1542,13 +1585,17 @@ function mountHero() {
   if (animate) setTimeout(() => updateLabel($("#hero-nf"), d, 1100), 250);
 }
 function renderSpots() {
-  const st = openStatus();
-  $("#spots").innerHTML = LOCATIONS.map(l => `
+  const now = campusNow();
+  $("#spots").innerHTML = LOCATIONS.map(l => {
+    const st = openStatus(l, now);
+    return `
     <article class="card spot">
       <div class="spot-head"><h3>${esc(l.name)}</h3><span class="pill pill-status ${st.open ? "pill-open" : "pill-closed"}">${st.open ? "Open" : "Closed"}</span></div>
-      <div class="spot-hours"><span class="label">Planned hours, today</span><span>${esc(st.text)}</span>${WINDOWS.map(w => `<span class="num small">${w.period === "lunch" ? "Lunch " : "Dinner"} ${fmtMin(w.start)} to ${fmtMin(w.end)}</span>`).join("")}</div>
+      <p class="muted small" style="margin:0">${esc(l.note)}</p>
+      <div class="spot-hours"><span class="label">Today</span><span>${esc(st.text)}</span>${todayLines(l, now).map(t => `<span class="num small">${esc(t)}</span>`).join("")}</div>
+      <p class="muted small spot-week" style="margin:0">${esc(l.summary)}</p>
       <button class="btn btn-quiet" type="button" id="spot-${l.id}" data-action="order-from" data-loc="${l.id}">${ic("pin", "ic-sm")}Order from here</button>
-    </article>`).join("");
+    </article>`; }).join("");
 }
 
 const PLEDGE_Q = {
@@ -1691,10 +1738,12 @@ function renderMenu() {
   const list = filterItems(base);
   const filtered = ui.diets.size > 0 || ui.q.trim() !== "";
   $("#menu-count").textContent = filtered ? `${plural(list.length, "item")} of ${base.length}` : plural(list.length, "item");
-  const w = currentWindow();
+  const nowC = campusNow(), mNow = minutesOf(nowC);
+  const w = mealWindows(curLoc(), dowAt(nowC)).find(x => mNow >= x.start && mNow < x.end) || null;
+  const mw = mealWindows(curLoc(), dowAt(nowC)).find(x => x.period === ui.tab);
   $("#menu-period-hint").textContent = (ui.tab === "lunch" || ui.tab === "dinner")
-    ? `${ui.tab === "lunch" ? "Lunch" : "Dinner"} items are ready during ${ui.tab} hours, ${hoursText().split(", ")[ui.tab === "lunch" ? 0 : 1]}.`
-    : "Available all day.";
+    ? (mw ? `${ui.tab === "lunch" ? "Lunch" : "Dinner"} at ${curLoc().name} today: ${fmtMin(mw.start)} to ${fmtMin(mw.end)}.` : `No ${ui.tab} at ${curLoc().name} today. You can order ahead for the next day it is served.`)
+    : `Available whenever ${curLoc().name} is open.`;
   let html = "", n = 0;
   const tiles = group => `<div class="grid-items">${group.map(it => cardHTML(it, n++, settle)).join("")}</div>`;
   if (!list.length) {
@@ -1718,13 +1767,13 @@ function renderOrderBar() {
   const slot = currentSlot();
   const sel = $("#ob-location");
   if (document.activeElement !== sel) {
-    sel.innerHTML = LOCATIONS.map(l => `<option value="${l.id}"${l.id === state.location ? " selected" : ""}>${esc(l.name)} (${st.open ? "open" : "closed"})</option>`).join("");
+    sel.innerHTML = LOCATIONS.map(l => `<option value="${l.id}"${l.id === state.location ? " selected" : ""}>${esc(l.name)} (${openStatus(l).open ? "open" : "closed"})</option>`).join("");
   }
   $("#ob-pickup").setAttribute("aria-pressed", String(state.fulfil === "pickup"));
   $("#ob-delivery").setAttribute("aria-pressed", String(state.fulfil === "delivery"));
   const ts = $("#ob-time");
   if (document.activeElement !== ts) ts.innerHTML = slotOptions(validSlots(), slot);
-  $("#ob-hours").textContent = `${st.text}. Planned hours: ${hoursText()}.`;
+  $("#ob-hours").textContent = `${st.text}. Today: ${hoursText()}.`;
   $("#ob-summary-text").textContent = `${LOC[state.location].name}, ${state.fulfil === "pickup" ? "pickup" : "delivery"}, ${slot ? slot.label : "no time fits"}`;
   $("#orderbar").classList.toggle("open", ui.obOpen);
   $("#ob-toggle").setAttribute("aria-expanded", String(ui.obOpen));
@@ -1980,8 +2029,8 @@ function renderDrawer() {
         </div>
       </fieldset>
       <div class="field"><label for="d-location">${state.fulfil === "pickup" ? "Pickup spot" : "Prepared at"}</label>
-        <select class="select" id="d-location">${LOCATIONS.map(l => `<option value="${l.id}"${l.id === state.location ? " selected" : ""}>${esc(l.name)} (${st.open ? "open" : "closed"})</option>`).join("")}</select>
-        <p class="hint">${esc(st.text)}. Planned hours: ${esc(hoursText())}.</p></div>
+        <select class="select" id="d-location">${LOCATIONS.map(l => `<option value="${l.id}"${l.id === state.location ? " selected" : ""}>${esc(l.name)} (${openStatus(l).open ? "open" : "closed"})</option>`).join("")}</select>
+        <p class="hint">${esc(st.text)}. Today: ${esc(hoursText())}.</p></div>
       ${state.fulfil === "delivery" ? `<div class="two">
         <div class="field"><label for="d-hall">Residence hall</label><input class="input" id="d-hall" value="${esc(d.hall)}"${invalidAttr("hall")}>${fieldErr("hall")}</div>
         <div class="field"><label for="d-room">Room number</label><input class="input" id="d-room" inputmode="text" value="${esc(d.room)}"${invalidAttr("room")}>${fieldErr("room")}</div>
@@ -2295,7 +2344,7 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   const t = e.target;
-  if (t.id === "ob-location" || t.id === "d-location") { state.location = t.value; save(); if (ui.view === "menu") renderOrderBar(); if ($("#drawer").open) withFocus(renderDrawer); }
+  if (t.id === "ob-location" || t.id === "d-location") { state.location = t.value; save(); if (ui.view === "menu") { renderOrderBar(); renderMenu(); } if ($("#drawer").open) withFocus(renderDrawer); }
   else if (t.id === "ob-time" || t.id === "d-slot") { state.slot = t.value; save(); renderOrderBar(); if ($("#drawer").open) { ui.errors.slot = null; withFocus(renderDrawer); } }
   else if (t.id === "menu-sort") { ui.sort = t.value; vt(renderMenu); }
   else if (t.id === "opt-double") { ui.sheet.dbl = t.checked; updateSheet(); }
