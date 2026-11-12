@@ -628,6 +628,30 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
 .glass-grid.two-up { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 720px) { .glass-grid.two-up { grid-template-columns: minmax(0, 1fr); } }
 #orders-main, #drawer-body, #signup, .kv dd { overflow-wrap: anywhere; }
+.offer { background: var(--zest); color: var(--zest-ink); border-radius: 16px; padding: 18px 20px; display: grid; gap: 12px; position: relative; overflow: hidden; }
+.offer::after { content: ""; position: absolute; right: -40px; top: -60px; width: 180px; height: 180px; border-radius: 50%; background: rgba(255,255,255,.28); pointer-events: none; }
+.offer-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
+.offer-big { font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 4vw, 34px); letter-spacing: -0.035em; line-height: 1.05; }
+.offer-sub { font-size: 15px; font-weight: 500; }
+.tiers { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; position: relative; z-index: 1; }
+.tier { background: rgba(255,255,255,.5); border-radius: 10px; padding: 8px 4px; text-align: center; display: grid; gap: 2px; border: 2px solid transparent; transition: transform .18s ease, background .18s ease; }
+.tier b { font-family: var(--font-num); font-size: 17px; font-variant-numeric: tabular-nums; }
+.tier span { font-size: 12px; }
+.tier.reached { background: rgba(255,255,255,.85); }
+.tier.now { background: #1A1A1A; color: #fff; transform: translateY(-3px); border-color: #1A1A1A; }
+@media (max-width: 520px) { .tiers { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.save-line { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 15px; }
+.save-line s { color: var(--muted); }
+.save-badge { background: var(--zest); color: var(--zest-ink); font-family: var(--font-num); font-weight: 500; font-size: 13px; padding: 4px 10px; border-radius: 6px; transform: rotate(-2deg); display: inline-block; }
+.save-nudge { color: var(--leaf); font-weight: 500; }
+.promo-pill { display: inline-flex; align-items: center; gap: 10px; background: var(--zest); color: var(--zest-ink); border-radius: 999px; padding: 8px 16px 8px 8px; font-weight: 600; font-size: 15px; text-decoration: none; width: max-content; max-width: 100%; box-shadow: 0 6px 20px rgba(0,0,0,.18); transition: transform .18s ease; }
+.promo-pill:hover { transform: translateY(-2px); }
+.hero-copy .promo-pill { margin-top: 6px; }
+.hero-actions { margin-bottom: 12px; }
+.promo-pill b { background: #1A1A1A; color: #fff; border-radius: 999px; padding: 4px 10px; font-family: var(--font-num); font-weight: 500; font-size: 13px; white-space: nowrap; }
+.promo-strip { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; background: var(--zest); color: var(--zest-ink); border-radius: 14px; padding: 12px 16px; font-weight: 500; }
+.promo-strip a { color: inherit; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .tier, .promo-pill { transition: none; } .tier.now { transform: none; } }
 .pm-list { display: grid; gap: 10px; }
 .pm-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 2.1fr) auto; gap: 8px; align-items: center; }
 .pm-row .btn-text { min-width: 44px; color: var(--muted); }
@@ -706,6 +730,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
             <a class="btn btn-primary" href="#menu" id="hero-order">Order now</a>
             <a class="btn btn-secondary" href="#menu" id="hero-menu">See the menu</a>
           </div>
+          <a class="promo-pill" href="#home" id="hero-promo" data-action="goto-pledge"><b>Up to 30% off</b><span>Plan meals ahead: 5% off your order per meal</span></a>
           <p class="hero-pay"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-check"></use></svg><span>Dining Dollars and meal swipes are planned, pending campus dining approval. No tax, no delivery fee.</span></p>
         </div>
         <div class="hero-label">
@@ -811,6 +836,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
   <div class="wrap">
     <div class="menu-head">
       <h1 id="menu-title" tabindex="-1">Menu</h1>
+      <p class="promo-strip" id="menu-promo"><span>Plan meals ahead and take 5% off your whole order for each one, up to 30% off.</span><a href="#home" id="menu-promo-link" data-action="goto-pledge">Plan my meals</a></p>
       <div class="meal-tabs" role="group" aria-label="Meal" id="meal-tabs">
         <span class="tab-ind" id="tab-ind" aria-hidden="true"></span>
         <button type="button" id="tab-lunch" data-action="tab" data-value="lunch" aria-pressed="true"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-sun"></use></svg>Lunch</button>
@@ -1643,6 +1669,18 @@ function pledgeRadios(key, optional) {
   </fieldset>`;
 }
 const MAX_PLAN = 14;
+const PLAN_STEP = 5, PLAN_CAP = 30;   // 5% off the whole planned order per meal, capped at 30%
+const planDiscount = n => Math.min(PLAN_CAP, Math.max(0, n) * PLAN_STEP);
+const afterDiscount = (cents, pct) => Math.round(cents * (100 - pct) / 100);
+function offerHTML(count) {
+  const pct = planDiscount(count);
+  const tiers = [1, 2, 3, 4, 5, 6].map(n => `<div class="tier${count >= n ? " reached" : ""}${(n === 6 ? count >= 6 : count === n) ? " now" : ""}"><b>${planDiscount(n)}%</b><span>${n === 6 ? "6+ meals" : plural(n, "meal")}</span></div>`).join("");
+  return `<div class="offer" id="plan-offer">
+    <div class="offer-head"><span class="offer-big">Plan ahead, save up to 30%</span></div>
+    <p class="offer-sub" style="margin:0">Every meal you plan in advance takes 5% off your whole order. Two meals is 10% off, three is 15%, up to 30% at six or more.</p>
+    <div class="tiers" role="img" aria-label="Discount by meals planned: 1 meal 5 percent, 2 meals 10 percent, 3 meals 15 percent, 4 meals 20 percent, 5 meals 25 percent, 6 or more meals 30 percent.${count ? ` You are at ${pct} percent.` : ""}">${tiers}</div>
+  </div>`;
+}
 const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const dateFromIso = iso => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); };
 const periodItems = period => ITEMS.filter(it => it.entree && it.period === period);
@@ -1674,7 +1712,7 @@ function reservedListHTML(prefix) {
   const list = upcomingReserved();
   if (!list.length) return "";
   return `<ul class="rm-list" id="${prefix}-reserved">${list.map(m => `
-    <li><span><span class="rm-when">${esc(fmtDate(dateFromIso(m.date)))}, ${m.period}, ${esc(LOC[m.spot].name)}${m.repeat ? ", every week" : ""}</span>${esc(ITEM[m.item].name)}</span>
+    <li><span><span class="rm-when">${esc(fmtDate(dateFromIso(m.date)))}, ${m.period}, ${esc(LOC[m.spot].name)}${m.repeat ? ", every week" : ""}</span>${esc(ITEM[m.item].name)} <span class="num small">${m.disc ? `<s class="muted">${money(ITEM[m.item].price)}</s> ${money(afterDiscount(ITEM[m.item].price, m.disc))} <span class="save-badge">${m.disc}% off</span>` : money(ITEM[m.item].price)}</span></span>
       <button class="btn-text" type="button" id="${prefix}-cancel-${idSafe(m.key)}" data-action="pm-cancel" data-key="${esc(m.key)}" aria-label="Cancel ${esc(ITEM[m.item].name)} on ${esc(fmtDate(dateFromIso(m.date)))}">Cancel</button></li>`).join("")}</ul>`;
 }
 function capturePledge() {
@@ -1695,7 +1733,7 @@ function mealRowError(m, spotId) {
 }
 function renderSignup() {
   const el = $("#signup");
-  const head = `<div style="display:grid;gap:6px"><p class="eyebrow">Reserve your first meal</p><h2 id="signup-title">Reserve your first meal</h2><p class="muted">Line up your meals for the week ahead and tell us how you'd pay. It decides whether we launch.</p></div>`;
+  const head = `<div style="display:grid;gap:6px"><p class="eyebrow">Reserve your first meal</p><h2 id="signup-title">Reserve your first meal</h2><p class="muted">Line up your meals for the week ahead and tell us how you'd pay. The more you plan, the less each one costs.</p></div>`;
   if (TALLY_FORM_URL) {
     el.innerHTML = `${head}
       <ul class="prose" style="margin:0;padding-left:20px;display:grid;gap:4px">
@@ -1708,7 +1746,9 @@ function renderSignup() {
     const s = state.signup;
     const lbl = (k, v) => (PLEDGE_Q[k].opts.find(o => o[0] === v) || [, "Not answered"])[1];
     const list = reservedListHTML("home");
+    const saved = upcomingReserved().reduce((a, m) => a + ITEM[m.item].price - afterDiscount(ITEM[m.item].price, m.disc || 0), 0);
     el.innerHTML = `${head}
+      ${saved ? `<p class="save-line" id="saved-line"><span class="save-badge">You save ${money(saved)}</span><span>on your planned meals. Plan more next time to save up to 30%.</span></p>` : offerHTML(0)}
       <p class="signup-msg ok" id="signup-msg" role="status">${ic("check", "ic-sm")} ${!DATA_ENDPOINT ? "Saved on this device. This demo doesn't send your answers anywhere yet." : s.sent ? "You're on the list. We'll email you when Grab n' Go launches." : "Saved. We'll send your answers as soon as you're connected."}</p>
       ${list ? `<div style="display:grid;gap:10px"><h3 style="margin:0">Your reserved meals</h3>${list}</div>` : ""}
       <dl class="kv" style="max-width:480px">
@@ -1727,7 +1767,10 @@ function renderSignup() {
   const rowErrs = ui.signupErrors.meals || [];
   const sum = meals.reduce((a, m) => { const it = ITEM[m.item], mc = macrosFor(it, false, "std"); a.price += it.price; a.cal += mc.cal; a.protein += mc.protein; return a; }, { price: 0, cal: 0, protein: 0 });
   const first = !state.reserved.length;
+  const pct = planDiscount(meals.length), nowPrice = afterDiscount(sum.price, pct);
+  const nudge = pct < PLAN_CAP ? `Add one more meal to save ${planDiscount(meals.length + 1)}%.` : "You've unlocked the full 30% off.";
   el.innerHTML = `${head}
+    ${offerHTML(meals.length)}
     <form class="form-grid" id="pledge-form" novalidate>
       <div class="field" style="max-width:420px">
         <label for="pledge-email">Email</label>
@@ -1746,8 +1789,9 @@ function renderSignup() {
           </div>`).join("")}</div>
         <div class="pm-foot" style="margin-top:12px">
           <button class="btn btn-quiet btn-sm" type="button" id="pm-add" data-action="pm-add"${meals.length >= MAX_PLAN ? " disabled" : ""}>${ic("plus", "ic-sm")}Add another meal</button>
-          <span class="pm-total" id="pm-total">${plural(meals.length, "meal")} · ${money(sum.price)} · ${sum.cal} cal · ${sum.protein}g protein</span>
+          <span class="pm-total" id="pm-total">${plural(meals.length, "meal")} · ${sum.cal} cal · ${sum.protein}g protein</span>
         </div>
+        <p class="save-line" id="pm-save" style="margin:12px 0 0"><span><s>${money(sum.price)}</s> <strong class="num">${money(nowPrice)}</strong></span><span class="save-badge">${pct}% off, you save ${money(sum.price - nowPrice)}</span><span class="save-nudge">${nudge}</span></p>
       </fieldset>
       <div class="field" style="max-width:420px">
         <label for="pm-spot">Pickup spot</label>
@@ -1757,7 +1801,7 @@ function renderSignup() {
       ${pledgeRadios("pay")}
       ${pledgeRadios("max", true)}
       ${pledgeRadios("get", true)}
-      <div><button class="btn btn-primary" type="submit" id="pledge-submit">${first && meals.length === 1 ? "Reserve my first meal" : `Reserve my ${plural(meals.length, "meal")}`}</button>${state.signup ? ` <button class="btn btn-quiet" type="button" id="pledge-cancel-edit" data-action="pledge-cancel-edit">Never mind</button>` : ""}</div>
+      <div><button class="btn btn-primary" type="submit" id="pledge-submit">${first && meals.length === 1 ? "Reserve my first meal, save 5%" : `Reserve my ${plural(meals.length, "meal")}, save ${pct}%`}</button>${state.signup ? ` <button class="btn btn-quiet" type="button" id="pledge-cancel-edit" data-action="pledge-cancel-edit">Never mind</button>` : ""}</div>
       <p class="hint">${DATA_ENDPOINT ? "Your answers go to the Grab n' Go team. We only use your email for launch updates. Nothing is charged, and you can cancel a reserved meal any time." : "Answers are kept on this device only. Nothing is charged."}</p>
     </form>`;
 }
@@ -1784,7 +1828,8 @@ function submitPledge(form) {
   let rid;
   do { rid = "R-" + String(1000 + Math.floor(Math.random() * 9000)); } while (state.reserved.some(m => m.rid === rid));
   const now = Date.now();
-  const added = meals.map((m, i) => ({ key: `${rid}-${i + 1}`, rid, date: m.day, period: m.period, item: m.item, spot, repeat: !!draft.repeat, ts: now, cancelled: false }));
+  const disc = planDiscount(meals.length);
+  const added = meals.map((m, i) => ({ key: `${rid}-${i + 1}`, rid, date: m.day, period: m.period, item: m.item, spot, repeat: !!draft.repeat, ts: now, cancelled: false, disc }));
   state.reserved.push(...added);
   state.signup = { email, pay: draft.pay, max: draft.max || null, get: draft.get || null, ts: now, sent: false };
   ui.signupDraft = {}; ui.signupErrors = {}; ui.signupEditing = false;
@@ -1793,12 +1838,12 @@ function submitPledge(form) {
   if (ui.view === "orders") renderOrders();
   const total = added.reduce((a, m) => a + ITEM[m.item].price, 0);
   track("reservation", { reservation: rid, email, pay: lbl("pay", draft.pay), max: lbl("max", draft.max), get: lbl("get", draft.get),
-    meals: added.length, total: (total / 100).toFixed(2), repeat: added.length ? (draft.repeat ? "Yes" : "No") : "", spot: added.length ? LOC[spot].name : "" }, { explicit: true });
+    meals: added.length, total: (total / 100).toFixed(2), discount: added.length ? disc + "%" : "", pay_total: (afterDiscount(total, disc) / 100).toFixed(2), repeat: added.length ? (draft.repeat ? "Yes" : "No") : "", spot: added.length ? LOC[spot].name : "" }, { explicit: true });
   for (const m of added) {
     track("reserved_meal", { meal_id: m.key, reservation: rid, date: m.date, day: DAY_NAMES[dateFromIso(m.date).getDay()], meal: m.period === "lunch" ? "Lunch" : "Dinner",
-      item: ITEM[m.item].name, price: (ITEM[m.item].price / 100).toFixed(2), spot: LOC[m.spot].name, repeat: m.repeat ? "Yes" : "No", status: "Reserved" }, { explicit: true });
+      item: ITEM[m.item].name, price: (ITEM[m.item].price / 100).toFixed(2), discount: disc + "%", price_after: (afterDiscount(ITEM[m.item].price, disc) / 100).toFixed(2), spot: LOC[m.spot].name, repeat: m.repeat ? "Yes" : "No", status: "Reserved" }, { explicit: true });
   }
-  announce(added.length ? `${plural(added.length, "meal")} reserved.` : "Answers saved.");
+  announce(added.length ? `${plural(added.length, "meal")} reserved at ${disc}% off.` : "Answers saved.");
   const msg = $("#signup-msg"); if (msg) { msg.tabIndex = -1; msg.focus(); }
 }
 function cancelReserved(key) {
