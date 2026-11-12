@@ -628,6 +628,16 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
 .glass-grid.two-up { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 720px) { .glass-grid.two-up { grid-template-columns: minmax(0, 1fr); } }
 #orders-main, #drawer-body, #signup, .kv dd { overflow-wrap: anywhere; }
+.pm-list { display: grid; gap: 10px; }
+.pm-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 2.1fr) auto; gap: 8px; align-items: center; }
+.pm-row .btn-text { min-width: 44px; color: var(--muted); }
+.pm-row .err { grid-column: 1 / -1; margin: 0; }
+.pm-foot { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.pm-total { font-family: var(--font-num); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 640px; }
+.rm-list li { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: space-between; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 15px; }
+.rm-list .rm-when { font-family: var(--font-num); font-size: 13px; color: var(--muted); display: block; }
+@media (max-width: 640px) { .pm-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .pm-row .pm-item { grid-column: 1 / -1; grid-row: 2; } }
 </style>
 </head>
 <body>
@@ -1134,6 +1144,7 @@ function defaults() {
     wallet: { dd: START_DD, swipes: START_SWIPES },
     orders: [],
     signup: null,
+    reserved: [],
     theme: "auto",
     vid: "",
     outbox: [],
@@ -1149,6 +1160,7 @@ function hydrate(src) {
   s.details = { ...d.details, ...(src.details || {}) };
   s.cart = Array.isArray(src.cart) ? src.cart.filter(l => l && ITEM[l.id] && l.qty > 0) : [];
   s.orders = Array.isArray(src.orders) ? src.orders.filter(o => o && o.no && o.totals && Array.isArray(o.items) && o.pay) : [];
+  s.reserved = Array.isArray(src.reserved) ? src.reserved.filter(m => m && m.key && ITEM[m.item] && LOC[m.spot] && /^\d{4}-\d{2}-\d{2}$/.test(m.date)).slice(-200) : [];
   s.outbox = Array.isArray(src.outbox) ? src.outbox.slice(-200) : [];
   s.vid = typeof src.vid === "string" ? src.vid.slice(0, 40) : "";
   if (!Number.isFinite(s.wallet.dd) || !Number.isFinite(s.wallet.swipes)) s.wallet = { ...d.wallet };
@@ -1630,9 +1642,60 @@ function pledgeRadios(key, optional) {
     ${err ? `<p class="err" id="pledge-${key}-err">${esc(err)}</p>` : ""}
   </fieldset>`;
 }
+const MAX_PLAN = 14;
+const isoDate = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const dateFromIso = iso => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); };
+const periodItems = period => ITEMS.filter(it => it.entree && it.period === period);
+function planDays() {
+  const now = campusNow();
+  return [1, 2, 3, 4, 5, 6, 7].map(d => { const dt = dayAt(now, d, 0); return { off: d, iso: isoDate(dt), dow: dt.getDay(), label: fmtDate(dt) }; });
+}
+function blankMeal(prev) {
+  const days = planDays();
+  if (!prev) return { day: days[0].iso, period: "lunch", item: periodItems("lunch")[0].id };
+  const i = days.findIndex(d => d.iso === prev.day);
+  return { day: days[Math.min(days.length - 1, i + 1)].iso, period: prev.period, item: prev.item };
+}
+function draftMeals() {
+  if (!Array.isArray(ui.signupDraft.meals) || !ui.signupDraft.meals.length) ui.signupDraft.meals = [blankMeal()];
+  const days = planDays();
+  for (const m of ui.signupDraft.meals) {
+    if (!days.some(d => d.iso === m.day)) m.day = days[0].iso;
+    if (m.period !== "lunch" && m.period !== "dinner") m.period = "lunch";
+    if (!periodItems(m.period).some(it => it.id === m.item)) m.item = periodItems(m.period)[0].id;
+  }
+  return ui.signupDraft.meals;
+}
+function upcomingReserved() {
+  const today = isoDate(campusNow());
+  return state.reserved.filter(m => !m.cancelled && m.date >= today).sort((a, b) => a.date.localeCompare(b.date) || (a.period === b.period ? 0 : a.period === "lunch" ? -1 : 1));
+}
+function reservedListHTML(prefix) {
+  const list = upcomingReserved();
+  if (!list.length) return "";
+  return `<ul class="rm-list" id="${prefix}-reserved">${list.map(m => `
+    <li><span><span class="rm-when">${esc(fmtDate(dateFromIso(m.date)))}, ${m.period}, ${esc(LOC[m.spot].name)}${m.repeat ? ", every week" : ""}</span>${esc(ITEM[m.item].name)}</span>
+      <button class="btn-text" type="button" id="${prefix}-cancel-${idSafe(m.key)}" data-action="pm-cancel" data-key="${esc(m.key)}" aria-label="Cancel ${esc(ITEM[m.item].name)} on ${esc(fmtDate(dateFromIso(m.date)))}">Cancel</button></li>`).join("")}</ul>`;
+}
+function capturePledge() {
+  const form = $("#pledge-form"); if (!form) return;
+  const fd = new FormData(form);
+  const d = ui.signupDraft;
+  d.email = String(fd.get("email") || "").trim();
+  d.pay = fd.get("pledge-pay") || d.pay; d.max = fd.get("pledge-max") || d.max; d.get = fd.get("pledge-get") || d.get;
+  d.spot = fd.get("pm-spot") || d.spot;
+  d.repeat = !!fd.get("pm-repeat");
+  d.meals = $$(".pm-row", form).map((row, i) => ({ day: $(`#pm-day-${i}`).value, period: $(`#pm-period-${i}`).value, item: $(`#pm-item-${i}`).value }));
+}
+function mealRowError(m, spotId) {
+  const loc = LOC[spotId], day = planDays().find(d => d.iso === m.day);
+  if (!loc || !day) return "";
+  if (!loc[m.period][day.dow]) return `${loc.name} doesn't serve ${m.period} on ${DAY_NAMES[day.dow]}. Pick another day, meal or pickup spot.`;
+  return "";
+}
 function renderSignup() {
   const el = $("#signup");
-  const head = `<div style="display:grid;gap:6px"><p class="eyebrow">Reserve your first meal</p><h2 id="signup-title">Reserve your first meal</h2><p class="muted">Tell us how you'd pay. It decides whether we launch.</p></div>`;
+  const head = `<div style="display:grid;gap:6px"><p class="eyebrow">Reserve your first meal</p><h2 id="signup-title">Reserve your first meal</h2><p class="muted">Line up your meals for the week ahead and tell us how you'd pay. It decides whether we launch.</p></div>`;
   if (TALLY_FORM_URL) {
     el.innerHTML = `${head}
       <ul class="prose" style="margin:0;padding-left:20px;display:grid;gap:4px">
@@ -1644,19 +1707,26 @@ function renderSignup() {
   if (state.signup && !ui.signupEditing) {
     const s = state.signup;
     const lbl = (k, v) => (PLEDGE_Q[k].opts.find(o => o[0] === v) || [, "Not answered"])[1];
+    const list = reservedListHTML("home");
     el.innerHTML = `${head}
       <p class="signup-msg ok" id="signup-msg" role="status">${ic("check", "ic-sm")} ${!DATA_ENDPOINT ? "Saved on this device. This demo doesn't send your answers anywhere yet." : s.sent ? "You're on the list. We'll email you when Grab n' Go launches." : "Saved. We'll send your answers as soon as you're connected."}</p>
+      ${list ? `<div style="display:grid;gap:10px"><h3 style="margin:0">Your reserved meals</h3>${list}</div>` : ""}
       <dl class="kv" style="max-width:480px">
         <dt>Email</dt><dd>${esc(s.email)}</dd>
         <dt>How you'd pay</dt><dd>${esc(lbl("pay", s.pay))}</dd>
         <dt>Most for a bowl</dt><dd>${esc(lbl("max", s.max))}</dd>
         <dt>How you'd get it</dt><dd>${esc(lbl("get", s.get))}</dd>
       </dl>
-      <p><button class="btn btn-quiet" type="button" id="pledge-edit" data-action="pledge-edit">Change my answers</button></p>`;
+      <p><button class="btn btn-primary" type="button" id="pledge-edit" data-action="pledge-edit">Reserve more meals</button></p>`;
     return;
   }
   const email = ui.signupDraft.email ?? (state.signup ? state.signup.email : "");
   const eErr = ui.signupErrors.email;
+  const meals = draftMeals(), days = planDays();
+  const spot = LOC[ui.signupDraft.spot] ? ui.signupDraft.spot : state.location;
+  const rowErrs = ui.signupErrors.meals || [];
+  const sum = meals.reduce((a, m) => { const it = ITEM[m.item], mc = macrosFor(it, false, "std"); a.price += it.price; a.cal += mc.cal; a.protein += mc.protein; return a; }, { price: 0, cal: 0, protein: 0 });
+  const first = !state.reserved.length;
   el.innerHTML = `${head}
     <form class="form-grid" id="pledge-form" novalidate>
       <div class="field" style="max-width:420px">
@@ -1664,36 +1734,81 @@ function renderSignup() {
         <input class="input" type="email" id="pledge-email" maxlength="254" name="email" autocomplete="email" placeholder="you@example.edu" value="${esc(email)}"${eErr ? ` aria-invalid="true" aria-describedby="pledge-email-err"` : ""}>
         ${eErr ? `<p class="err" id="pledge-email-err">${esc(eErr)}</p>` : ""}
       </div>
+      <fieldset class="pledge-q" id="pm-meals">
+        <legend>Meals to reserve</legend>
+        <div class="pm-list">${meals.map((m, i) => `
+          <div class="pm-row">
+            <select class="select" id="pm-day-${i}" aria-label="Day for meal ${i + 1}">${days.map(d => `<option value="${d.iso}"${d.iso === m.day ? " selected" : ""}>${esc(d.label)}</option>`).join("")}</select>
+            <select class="select" id="pm-period-${i}" aria-label="Lunch or dinner for meal ${i + 1}"><option value="lunch"${m.period === "lunch" ? " selected" : ""}>Lunch</option><option value="dinner"${m.period === "dinner" ? " selected" : ""}>Dinner</option></select>
+            <select class="select pm-item" id="pm-item-${i}" aria-label="Dish for meal ${i + 1}"${rowErrs[i] ? ` aria-invalid="true" aria-describedby="pm-err-${i}"` : ""}>${periodItems(m.period).map(it => `<option value="${it.id}"${it.id === m.item ? " selected" : ""}>${esc(it.name)}, ${money(it.price)}</option>`).join("")}</select>
+            ${meals.length > 1 ? `<button class="btn-text" type="button" id="pm-remove-${i}" data-action="pm-remove" data-i="${i}" aria-label="Remove meal ${i + 1}">Remove</button>` : `<span></span>`}
+            ${rowErrs[i] ? `<p class="err" id="pm-err-${i}">${esc(rowErrs[i])}</p>` : ""}
+          </div>`).join("")}</div>
+        <div class="pm-foot" style="margin-top:12px">
+          <button class="btn btn-quiet btn-sm" type="button" id="pm-add" data-action="pm-add"${meals.length >= MAX_PLAN ? " disabled" : ""}>${ic("plus", "ic-sm")}Add another meal</button>
+          <span class="pm-total" id="pm-total">${plural(meals.length, "meal")} · ${money(sum.price)} · ${sum.cal} cal · ${sum.protein}g protein</span>
+        </div>
+      </fieldset>
+      <div class="field" style="max-width:420px">
+        <label for="pm-spot">Pickup spot</label>
+        <select class="select" id="pm-spot" name="pm-spot">${LOCATIONS.map(l => `<option value="${l.id}"${l.id === spot ? " selected" : ""}>${esc(l.name)}</option>`).join("")}</select>
+      </div>
+      <div><label class="chip-opt" for="pm-repeat"><input type="checkbox" name="pm-repeat" id="pm-repeat" value="1"${ui.signupDraft.repeat ? " checked" : ""}>${ic("check", "ic-sm")}<span>Repeat these meals every week</span></label></div>
       ${pledgeRadios("pay")}
       ${pledgeRadios("max", true)}
       ${pledgeRadios("get", true)}
-      <div><button class="btn btn-primary" type="submit" id="pledge-submit">Reserve my first meal</button></div>
-      <p class="hint">${DATA_ENDPOINT ? "Your answers go to the Grab n' Go team. We only use your email for launch updates. Nothing is charged." : "Answers are kept on this device only. Nothing is charged."}</p>
+      <div><button class="btn btn-primary" type="submit" id="pledge-submit">${first && meals.length === 1 ? "Reserve my first meal" : `Reserve my ${plural(meals.length, "meal")}`}</button>${state.signup ? ` <button class="btn btn-quiet" type="button" id="pledge-cancel-edit" data-action="pledge-cancel-edit">Never mind</button>` : ""}</div>
+      <p class="hint">${DATA_ENDPOINT ? "Your answers go to the Grab n' Go team. We only use your email for launch updates. Nothing is charged, and you can cancel a reserved meal any time." : "Answers are kept on this device only. Nothing is charged."}</p>
     </form>`;
 }
 function submitPledge(form) {
-  const fd = new FormData(form);
-  const email = String(fd.get("email") || "").trim();
-  const draft = { email, pay: fd.get("pledge-pay"), max: fd.get("pledge-max"), get: fd.get("pledge-get") };
+  capturePledge();
+  const draft = ui.signupDraft, email = draft.email;
   const errors = {};
   if (!email) errors.email = "Add your email so we can reach you at launch.";
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) errors.email = "That email doesn't look right. Check for a typo, like a missing @ or dot.";
   if (!draft.pay) errors.pay = "Choose how you'd pay, even if the answer is that you wouldn't buy it.";
+  const wontBuy = draft.pay === "none";
+  const spot = LOC[draft.spot] ? draft.spot : state.location;
+  const meals = wontBuy ? [] : draftMeals().slice(0, MAX_PLAN);
+  const rowErrs = meals.map(m => mealRowError(m, spot));
+  if (rowErrs.some(Boolean)) errors.meals = rowErrs;
   ui.signupErrors = errors;
-  ui.signupDraft = draft;
   if (Object.keys(errors).length) {
     renderSignup();
-    const first = errors.email ? $("#pledge-email") : $("#pledge-pay-dd");
-    if (first) first.focus();
+    const firstEl = errors.email ? $("#pledge-email") : errors.meals ? $(`#pm-item-${rowErrs.findIndex(Boolean)}`) : $("#pledge-pay-dd");
+    if (firstEl) firstEl.focus();
     return;
   }
-  state.signup = { email, pay: draft.pay, max: draft.max || null, get: draft.get || null, ts: Date.now(), sent: false };
+  const lbl = (k, v) => v ? (PLEDGE_Q[k].opts.find(o => o[0] === v) || [, ""])[1] : "";
+  let rid;
+  do { rid = "R-" + String(1000 + Math.floor(Math.random() * 9000)); } while (state.reserved.some(m => m.rid === rid));
+  const now = Date.now();
+  const added = meals.map((m, i) => ({ key: `${rid}-${i + 1}`, rid, date: m.day, period: m.period, item: m.item, spot, repeat: !!draft.repeat, ts: now, cancelled: false }));
+  state.reserved.push(...added);
+  state.signup = { email, pay: draft.pay, max: draft.max || null, get: draft.get || null, ts: now, sent: false };
   ui.signupDraft = {}; ui.signupErrors = {}; ui.signupEditing = false;
   save();
   renderSignup();
-  const lbl = (k, v) => v ? (PLEDGE_Q[k].opts.find(o => o[0] === v) || [, ""])[1] : "";
-  track("reservation", { email, pay: lbl("pay", draft.pay), max: lbl("max", draft.max), get: lbl("get", draft.get) }, { explicit: true });
+  if (ui.view === "orders") renderOrders();
+  const total = added.reduce((a, m) => a + ITEM[m.item].price, 0);
+  track("reservation", { reservation: rid, email, pay: lbl("pay", draft.pay), max: lbl("max", draft.max), get: lbl("get", draft.get),
+    meals: added.length, total: (total / 100).toFixed(2), repeat: added.length ? (draft.repeat ? "Yes" : "No") : "", spot: added.length ? LOC[spot].name : "" }, { explicit: true });
+  for (const m of added) {
+    track("reserved_meal", { meal_id: m.key, reservation: rid, date: m.date, day: DAY_NAMES[dateFromIso(m.date).getDay()], meal: m.period === "lunch" ? "Lunch" : "Dinner",
+      item: ITEM[m.item].name, price: (ITEM[m.item].price / 100).toFixed(2), spot: LOC[m.spot].name, repeat: m.repeat ? "Yes" : "No", status: "Reserved" }, { explicit: true });
+  }
+  announce(added.length ? `${plural(added.length, "meal")} reserved.` : "Answers saved.");
   const msg = $("#signup-msg"); if (msg) { msg.tabIndex = -1; msg.focus(); }
+}
+function cancelReserved(key) {
+  const m = state.reserved.find(x => x.key === key); if (!m || m.cancelled) return;
+  m.cancelled = true;
+  save();
+  if (!ui.signupEditing) renderSignup();
+  if (ui.view === "orders") renderOrders();
+  track("meal_cancel", { meal_id: m.key, reservation: m.rid, item: ITEM[m.item].name }, { explicit: true });
+  announce(`Cancelled ${ITEM[m.item].name} on ${fmtDate(dateFromIso(m.date))}.`);
 }
 
 /* ================= menu ================= */
@@ -2224,6 +2339,8 @@ function renderOrders() {
   } else {
     ui.stageSig = "";
   }
+  const rlist = reservedListHTML("orders");
+  if (rlist) html += `<section aria-labelledby="reserved-title" style="display:grid;gap:12px"><h2 class="section-title" id="reserved-title">Reserved meals</h2>${rlist}<p><a class="btn btn-quiet btn-sm" href="#home" id="orders-reserve-more" data-action="goto-pledge">Reserve more meals</a></p></section>`;
   if (past.length) {
     html += `<section aria-labelledby="past-title"><h2 class="section-title" id="past-title">Past orders</h2><ul class="history">${past.map(o => `
       <li>
@@ -2357,7 +2474,11 @@ document.addEventListener("click", e => {
       announce("Demo reset. $150.00 Dining Dollars and 10 swipes restored.");
       break;
     case "theme": state.theme = v; save(); applyTheme(); break;
-    case "pledge-edit": ui.signupEditing = true; renderSignup(); $("#pledge-email").focus(); break;
+    case "pledge-edit": ui.signupEditing = true; ui.signupDraft = { pay: state.signup && state.signup.pay, max: state.signup && state.signup.max, get: state.signup && state.signup.get }; renderSignup(); $("#pm-day-0").focus(); break;
+    case "pledge-cancel-edit": ui.signupEditing = false; ui.signupDraft = {}; ui.signupErrors = {}; renderSignup(); { const b = $("#pledge-edit"); if (b) b.focus(); } break;
+    case "pm-add": capturePledge(); if (ui.signupDraft.meals.length < MAX_PLAN) ui.signupDraft.meals.push(blankMeal(ui.signupDraft.meals[ui.signupDraft.meals.length - 1])); ui.signupErrors = {}; renderSignup(); $(`#pm-day-${ui.signupDraft.meals.length - 1}`).focus(); break;
+    case "pm-remove": capturePledge(); ui.signupDraft.meals.splice(Number(t.dataset.i), 1); ui.signupErrors = {}; renderSignup(); $("#pm-add").focus(); break;
+    case "pm-cancel": cancelReserved(t.dataset.key); break;
     case "goto-pledge": ui.scrollTo = "pledge"; if (location.hash === "#home") { e.preventDefault(); route(false); } break;
   }
 });
@@ -2368,6 +2489,7 @@ document.addEventListener("change", e => {
   else if (t.id === "menu-sort") { ui.sort = t.value; vt(renderMenu); }
   else if (t.id === "opt-double") { ui.sheet.dbl = t.checked; updateSheet(); }
   else if (t.name === "sheet-base") { ui.sheet.base = t.value; updateSheet(); }
+  else if (t.closest && t.closest("#pledge-form")) { capturePledge(); if (t.id.startsWith("pm-")) { ui.signupErrors.meals = null; withFocus(renderSignup); } }
   else if (t.name === "pay") { state.details.pay = t.value; save(); ui.errors.pay = null; withFocus(renderDrawer); }
 });
 document.addEventListener("input", e => {
