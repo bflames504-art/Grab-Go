@@ -1177,7 +1177,7 @@ function track(type, data = {}, opts = {}) {
   state.outbox.push({ type, ts: new Date().toISOString(), vid: state.vid, device: window.innerWidth < 720 ? "phone" : "desktop", ...data });
   if (state.outbox.length > 200) state.outbox = state.outbox.slice(-200);
   save();
-  if (opts.explicit) flushOutbox(); else scheduleFlush();
+  if (opts.explicit || opts.now) flushOutbox(); else scheduleFlush();
 }
 let flushTimer = 0;
 function scheduleFlush() { clearTimeout(flushTimer); flushTimer = setTimeout(flushOutbox, 1500); }
@@ -2162,7 +2162,7 @@ function placeOrder() {
     pay: PAY_LABEL[p.method], swipes: p.method === "card" ? 0 : p.swipes, dining_dollars: p.method === "card" ? "0.00" : (p.dd / 100).toFixed(2),
     fulfil: order.fulfil, spot: LOC[order.location].name, time: order.slotLabel,
     double_protein: order.items.filter(l => l.dbl).reduce((n, l) => n + l.qty, 0), cal: t.cal, protein: t.protein
-  });
+  }, { now: true });
   state.cart = [];
   ui.lastOrderNo = no;
   save();
@@ -2337,7 +2337,7 @@ document.addEventListener("click", e => {
     case "place-order": placeOrder(); break;
     case "wyr": {
       const o = state.orders.find(x => x.no === ui.lastOrderNo);
-      if (o) { o.wyr = v; save(); withFocus(renderDrawer); track("order_intent", { order: o.no, answer: WYR[v] }); }
+      if (o) { o.wyr = v; save(); withFocus(renderDrawer); track("order_intent", { order: o.no, answer: WYR[v] }, { now: true }); }
       break;
     }
     case "order-again": orderAgain(t.dataset.no); break;
