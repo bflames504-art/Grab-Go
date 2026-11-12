@@ -627,6 +627,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
 }
 .glass-grid.two-up { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 720px) { .glass-grid.two-up { grid-template-columns: minmax(0, 1fr); } }
+#orders-main, #drawer-body, #signup, .kv dd { overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -812,7 +813,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
           <label for="menu-search">Search</label>
           <div class="search">
             <svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg>
-            <input class="input" type="search" id="menu-search" placeholder="Salmon, quinoa, avocado" autocomplete="off">
+            <input class="input" type="search" id="menu-search" maxlength="60" placeholder="Salmon, quinoa, avocado" autocomplete="off">
           </div>
         </div>
         <div class="sort">
@@ -917,7 +918,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
     <div style="display:grid;gap:12px">
       <span class="wordmark" aria-hidden="true" style="font-size:20px;width:max-content">Grab n' Go</span>
       <p>Grab n' Go is a student venture concept created by Kaitlyn Michael and Team 2 for an entrepreneurship course. It is not affiliated with or endorsed by Coastal Carolina University or its dining services. This site is a demo: no orders are fulfilled and no payments are taken. Nutrition values are targets for concept recipes.</p>
-      <p id="privacy-note" hidden>To plan our launch, this site records anonymous visits and demo order activity. Your email is collected only if you submit the reservation form, and names and room numbers never leave your device.</p>
+      <p id="privacy-note" hidden>To plan our launch, this site records anonymous visits, clicks and demo order activity. Your email is collected only if you submit the reservation form, and names and room numbers never leave your device.</p>
     </div>
     <div class="theme-ctl">
       <span class="label" id="theme-label">Theme</span>
@@ -1147,6 +1148,8 @@ function hydrate(src) {
   s.outbox = Array.isArray(src.outbox) ? src.outbox.slice(-200) : [];
   s.vid = typeof src.vid === "string" ? src.vid.slice(0, 40) : "";
   if (!Number.isFinite(s.wallet.dd) || !Number.isFinite(s.wallet.swipes)) s.wallet = { ...d.wallet };
+  for (const k of ["name", "hall", "room"]) s.details[k] = String(s.details[k] ?? "").slice(0, k === "room" ? 20 : 60);
+  s.orders.forEach(o => { o.name = String(o.name ?? "").slice(0, 60); o.hall = String(o.hall ?? "").slice(0, 60); o.room = String(o.room ?? "").slice(0, 20); });
   if (!LOC[s.location]) s.location = d.location;
   if (!["pickup", "delivery"].includes(s.fulfil)) s.fulfil = "pickup";
   if (!["dd", "swipe", "card"].includes(s.details.pay)) s.details.pay = "dd";
@@ -1174,8 +1177,19 @@ function track(type, data = {}, opts = {}) {
   state.outbox.push({ type, ts: new Date().toISOString(), vid: state.vid, device: window.innerWidth < 720 ? "phone" : "desktop", ...data });
   if (state.outbox.length > 200) state.outbox = state.outbox.slice(-200);
   save();
-  flushOutbox();
+  if (opts.explicit) flushOutbox(); else scheduleFlush();
 }
+let flushTimer = 0;
+function scheduleFlush() { clearTimeout(flushTimer); flushTimer = setTimeout(flushOutbox, 1500); }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushOutbox(); });
+// Which control was clicked, by its visible label. Never reads what someone typed.
+document.addEventListener("click", e => {
+  if (!DATA_ENDPOINT) return;
+  const t = e.target.closest && e.target.closest("button, a[href], label.chip-opt, summary");
+  if (!t) return;
+  const label = (t.getAttribute("aria-label") || t.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
+  track("activity", { action: "click", item: label || t.id || t.dataset.action || "unlabeled", detail: PAGE_NAME[ui.view] + ($("#drawer").open ? " > order panel" : $("#sheet").open ? " > item sheet" : "") });
+}, true);
 let flushing = false;
 async function flushOutbox() {
   if (flushing || !DATA_ENDPOINT || !state.outbox.length) return;
@@ -1643,7 +1657,7 @@ function renderSignup() {
     <form class="form-grid" id="pledge-form" novalidate>
       <div class="field" style="max-width:420px">
         <label for="pledge-email">Email</label>
-        <input class="input" type="email" id="pledge-email" name="email" autocomplete="email" placeholder="you@example.edu" value="${esc(email)}"${eErr ? ` aria-invalid="true" aria-describedby="pledge-email-err"` : ""}>
+        <input class="input" type="email" id="pledge-email" maxlength="254" name="email" autocomplete="email" placeholder="you@example.edu" value="${esc(email)}"${eErr ? ` aria-invalid="true" aria-describedby="pledge-email-err"` : ""}>
         ${eErr ? `<p class="err" id="pledge-email-err">${esc(eErr)}</p>` : ""}
       </div>
       ${pledgeRadios("pay")}
@@ -2021,7 +2035,7 @@ function renderDrawer() {
     const d = state.details, st = openStatus(), slot = currentSlot(), p = paymentFor(d.pay);
     const payOpt = (v, title, sub, pill) => `<label class="opt" for="pay-${v}"><input type="radio" name="pay" id="pay-${v}" value="${v}"${d.pay === v ? " checked" : ""}><span>${esc(title)}<small>${sub}</small></span><span class="pill pill-planned">${esc(pill)}</span></label>`;
     body.innerHTML = `<form class="form-grid" id="details-form" novalidate>
-      <div class="field"><label for="order-name">Name for the order</label><input class="input" id="order-name" autocomplete="given-name" value="${esc(d.name)}"${invalidAttr("name")}>${fieldErr("name")}</div>
+      <div class="field"><label for="order-name">Name for the order</label><input class="input" id="order-name" maxlength="60" autocomplete="given-name" value="${esc(d.name)}"${invalidAttr("name")}>${fieldErr("name")}</div>
       <fieldset><legend>How you get it</legend>
         <div class="seg" role="group" aria-label="How you get it" style="margin-top:8px;display:grid">
           <button type="button" id="d-pickup" data-action="set-fulfil" data-value="pickup" aria-pressed="${state.fulfil === "pickup"}">${ic("bag", "ic-sm")}Pickup</button>
@@ -2032,8 +2046,8 @@ function renderDrawer() {
         <select class="select" id="d-location">${LOCATIONS.map(l => `<option value="${l.id}"${l.id === state.location ? " selected" : ""}>${esc(l.name)} (${openStatus(l).open ? "open" : "closed"})</option>`).join("")}</select>
         <p class="hint">${esc(st.text)}. Today: ${esc(hoursText())}.</p></div>
       ${state.fulfil === "delivery" ? `<div class="two">
-        <div class="field"><label for="d-hall">Residence hall</label><input class="input" id="d-hall" value="${esc(d.hall)}"${invalidAttr("hall")}>${fieldErr("hall")}</div>
-        <div class="field"><label for="d-room">Room number</label><input class="input" id="d-room" inputmode="text" value="${esc(d.room)}"${invalidAttr("room")}>${fieldErr("room")}</div>
+        <div class="field"><label for="d-hall">Residence hall</label><input class="input" id="d-hall" maxlength="60" value="${esc(d.hall)}"${invalidAttr("hall")}>${fieldErr("hall")}</div>
+        <div class="field"><label for="d-room">Room number</label><input class="input" id="d-room" maxlength="20" inputmode="text" value="${esc(d.room)}"${invalidAttr("room")}>${fieldErr("room")}</div>
       </div><p class="hint">Delivery adds about 15 minutes. No delivery fee.</p>` : ""}
       <div class="field"><label for="d-slot">Time</label><select class="select" id="d-slot"${invalidAttr("slot")}>${slotOptions(validSlots(), slot)}</select>${fieldErr("slot")}</div>
       <fieldset><legend>Payment</legend>
@@ -2122,6 +2136,7 @@ function submitDetails() {
   gotoStep("confirm");
 }
 function placeOrder() {
+  if (!state.cart.length) return;
   ui.errors = validateDetails();
   if (Object.keys(ui.errors).length) { gotoStep("details"); submitDetails(); return; }
   const d = state.details, slot = currentSlot(), p = paymentFor(d.pay);
@@ -2363,6 +2378,20 @@ document.addEventListener("submit", e => {
   else if (e.target.id === "details-form") { e.preventDefault(); submitDetails(); }
 });
 window.addEventListener("hashchange", () => route(true));
+// Keep two open tabs in step: when another tab saves, load what it saved.
+window.addEventListener("storage", e => {
+  if (e.key !== STORE_KEY || !e.newValue) return;
+  let next; try { next = JSON.parse(e.newValue); } catch (err) { return; }
+  const keepOutbox = state.outbox;
+  state = hydrate(next);
+  if (keepOutbox.length > state.outbox.length) state.outbox = keepOutbox;
+  applyTheme();
+  renderCartBits();
+  if (!ui.signupEditing && !Object.keys(ui.signupDraft).length) renderSignup();
+  if (ui.view === "menu") renderMenu();
+  if (ui.view === "orders") renderOrders();
+  if ($("#drawer").open && ui.step !== "done") { if (!state.cart.length) ui.step = "cart"; withFocus(renderDrawer); }
+});
 setupDialog($("#sheet"));
 setupDialog($("#drawer"), () => { if (ui.step === "done") ui.step = "cart"; });
 setupDialog($("#confirm-dialog"));
