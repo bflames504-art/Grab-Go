@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Security policy: the page may only run its own code and Microsoft Clarity, and may only send data to the Google Sheet receiver and Clarity. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://www.clarity.ms https://scripts.clarity.ms https://*.clarity.ms; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://*.clarity.ms https://c.bing.com; connect-src https://script.google.com https://script.googleusercontent.com https://*.clarity.ms https://c.bing.com; worker-src blob:; child-src blob:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Grab n' Go</title>
 <meta name="description" content="Grab n' Go: a student venture concept for high-protein bowls and wraps, pre-ordered with Dining Dollars or a meal swipe. Demo only.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -995,11 +998,11 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
 </dialog>
 
 <dialog class="confirm" id="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
-  <h2 id="confirm-title">Reset the demo?</h2>
-  <p id="confirm-text">This restores $150.00 in Dining Dollars and 10 meal swipes, and clears your orders on this device.</p>
+  <h2 id="confirm-title">Clear your info from this browser?</h2>
+  <p id="confirm-text">This removes your orders, reserved meals list, name, room and email from this browser, and restores the demo balance. Use it on a shared or lab computer. Meals you already reserved stay reserved with Grab n' Go.</p>
   <div class="foot-row">
     <button class="btn btn-quiet" type="button" id="confirm-no" data-action="confirm-no">Keep everything</button>
-    <button class="btn btn-primary" type="button" id="confirm-yes" data-action="confirm-yes">Reset demo</button>
+    <button class="btn btn-primary" type="button" id="confirm-yes" data-action="confirm-yes">Clear and reset</button>
   </div>
 </dialog>
 
@@ -1044,16 +1047,17 @@ const LOCATIONS = [
     dinner: week(null, H(17, 20), H(17, 20), H(17, 20), H(17, 20), null, null),
     summary: "Mon to Thu 7:30 am to 8:00 pm · Fri 7:30 am to 2:30 pm · closed Sat and Sun" }
 ];
-const LOC = Object.fromEntries(LOCATIONS.map(l => [l.id, l]));
+const bare = o => Object.assign(Object.create(null), o);   // lookup table with no inherited keys
+const LOC = bare(Object.fromEntries(LOCATIONS.map(l => [l.id, l])));
 const CAMPUS_TZ = "America/New_York";
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const BASES = {
+const BASES = bare({
   std: { label: "As designed", cal: 0, protein: 0, carbs: 0 },
   quinoa: { label: "Swap to quinoa", cal: 60, protein: 3, carbs: 10, ing: "quinoa" },
   cauli: { label: "Swap to cauliflower rice", cal: -80, protein: 0, carbs: -10, ing: "cauliflower rice" }
-};
-const PAY_LABEL = { dd: "Dining Dollars", swipe: "Meal swipe", card: "Card (demo)" };
-const WYR = { plan: "Yes, with my meal plan", pocket: "Yes, out of pocket", no: "No" };
+});
+const PAY_LABEL = bare({ dd: "Dining Dollars", swipe: "Meal swipe", card: "Card (demo)" });
+const WYR = bare({ plan: "Yes, with my meal plan", pocket: "Yes, out of pocket", no: "No" });
 
 // Source: itemDatabase + menuData in the original site. Names recapitalized only; prices in cents.
 const RAW_ITEMS = [
@@ -1141,7 +1145,7 @@ const ITEMS = RAW_ITEMS.map((it, i) => ({
   contains: allergensOf(it.ingredients),
   entree: it.cat === "bowl" || it.cat === "wrap"
 }));
-const ITEM = Object.fromEntries(ITEMS.map(it => [it.id, it]));
+const ITEM = bare(Object.fromEntries(ITEMS.map(it => [it.id, it])));
 const DIETS = ["High-Protein", "Vegetarian", "Vegan", "Gluten-Free"];
 const HERO_IDS = ["teriyaki-salmon-bowl", "black-bean-bowl", "cobb-salad-wrap"];
 
@@ -1185,22 +1189,54 @@ function defaults() {
 }
 let state = defaults();
 function hydrate(src) {
+  // Saved data can be edited by hand, by a browser extension, or by another page on the same web address.
+  // Nothing is trusted: every value is checked against a short list, a pattern, or rebuilt from scratch.
   const d = defaults();
-  if (!src || typeof src !== "object") return d;
-  const s = { ...d, ...src };
-  s.wallet = { ...d.wallet, ...(src.wallet || {}) };
-  s.details = { ...d.details, ...(src.details || {}) };
-  s.cart = Array.isArray(src.cart) ? src.cart.filter(l => l && ITEM[l.id] && l.qty > 0) : [];
-  s.orders = Array.isArray(src.orders) ? src.orders.filter(o => o && o.no && o.totals && Array.isArray(o.items) && o.pay) : [];
-  s.reserved = Array.isArray(src.reserved) ? src.reserved.filter(m => m && m.key && ITEM[m.item] && LOC[m.spot] && /^\d{4}-\d{2}-\d{2}$/.test(m.date)).slice(-200) : [];
-  s.outbox = Array.isArray(src.outbox) ? src.outbox.slice(-200) : [];
-  s.vid = typeof src.vid === "string" ? src.vid.slice(0, 40) : "";
-  if (!Number.isFinite(s.wallet.dd) || !Number.isFinite(s.wallet.swipes)) s.wallet = { ...d.wallet };
-  for (const k of ["name", "hall", "room"]) s.details[k] = String(s.details[k] ?? "").slice(0, k === "room" ? 20 : 60);
-  s.orders.forEach(o => { o.name = String(o.name ?? "").slice(0, 60); o.hall = String(o.hall ?? "").slice(0, 60); o.room = String(o.room ?? "").slice(0, 20); });
-  if (!LOC[s.location]) s.location = d.location;
-  if (!["pickup", "delivery"].includes(s.fulfil)) s.fulfil = "pickup";
-  if (!["dd", "swipe", "card"].includes(s.details.pay)) s.details.pay = "dd";
+  if (!src || typeof src !== "object" || Array.isArray(src)) return d;
+  const str = (v, max) => (typeof v === "string" ? v : v == null ? "" : String(v)).slice(0, max);
+  const num = (v, lo, hi, dflt) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt);
+  const int = (v, lo, hi, dflt) => Math.round(num(v, lo, hi, dflt));
+  const one = (v, list, dflt) => (typeof v === "string" && list.includes(v) ? v : dflt);
+  const arr = (v, max) => (Array.isArray(v) ? v.slice(-max) : []);
+  const obj = v => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+  const itemId = v => (typeof v === "string" && ITEM[v] ? v : null);
+  const locId = v => (typeof v === "string" && LOC[v] ? v : null);
+  const line = l => {
+    l = obj(l); const id = itemId(l.id); if (!id) return null;
+    const it = ITEM[id], dbl = !!l.dbl && !!it.boost, base = it.cat === "bowl" && typeof l.base === "string" && BASES[l.base] && !it.noBase ? l.base : "std";
+    return { key: `${id}|${dbl ? 1 : 0}|${base}`, id, dbl, base, qty: int(l.qty, 1, 20, 1) };
+  };
+  const s = d;
+  s.cart = arr(src.cart, 60).map(line).filter(Boolean);
+  s.location = locId(src.location) || d.location;
+  s.fulfil = one(src.fulfil, ["pickup", "delivery"], "pickup");
+  s.slot = typeof src.slot === "string" && /^(asap|\d{1,16})$/.test(src.slot) ? src.slot : d.slot;
+  s.theme = one(src.theme, ["auto", "light", "dark"], "auto");
+  s.vid = typeof src.vid === "string" && /^[A-Za-z0-9-]{1,40}$/.test(src.vid) ? src.vid : "";
+  const det = obj(src.details);
+  s.details = { ...d.details, name: str(det.name, 60), hall: str(det.hall, 60), room: str(det.room, 20), pay: one(det.pay, ["dd", "swipe", "card"], "dd") };
+  const w = obj(src.wallet);
+  s.wallet = { dd: int(w.dd, 0, 10000000, d.wallet.dd), swipes: int(w.swipes, 0, 10000, d.wallet.swipes) };
+  const su = src.signup && typeof src.signup === "object" ? src.signup : null;
+  const pq = k => PLEDGE_Q[k].opts.map(o => o[0]);
+  s.signup = su && typeof su.email === "string" && su.email && one(su.pay, pq("pay"), null)
+    ? { email: str(su.email, 254), pay: su.pay, max: one(su.max, pq("max"), null), get: one(su.get, pq("get"), null), ts: num(su.ts, 0, 9e15, 0), sent: !!su.sent } : null;
+  s.reserved = arr(src.reserved, 200).map(m => {
+    m = obj(m); const item = itemId(m.item), spot = locId(m.spot);
+    if (!item || !spot || typeof m.key !== "string" || !/^R-[A-Za-z0-9]{1,12}-\d{1,2}$/.test(m.key) || typeof m.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(m.date)) return null;
+    return { key: m.key, rid: m.key.replace(/-\d{1,2}$/, ""), date: m.date, period: one(m.period, ["lunch", "dinner"], ITEM[item].period === "dinner" ? "dinner" : "lunch"), item, spot,
+      repeat: !!m.repeat, ts: num(m.ts, 0, 9e15, 0), cancelled: !!m.cancelled, disc: int(m.disc, 0, PLAN_CAP, 0) };
+  }).filter(Boolean);
+  s.orders = arr(src.orders, 100).map(o => {
+    o = obj(o); const t = obj(o.totals), py = obj(o.pay), items = arr(o.items, 60).map(line).filter(Boolean);
+    if (typeof o.no !== "string" || !/^GNG-\d{1,8}$/.test(o.no) || !items.length) return null;
+    return { no: o.no, ts: num(o.ts, 0, 9e15, 0), name: str(o.name, 60), fulfil: one(o.fulfil, ["pickup", "delivery"], "pickup"), location: locId(o.location) || d.location,
+      hall: str(o.hall, 60), room: str(o.room, 20), slotLabel: str(o.slotLabel, 60), slotT: num(o.slotT, 0, 9e15, 0), items,
+      totals: { count: int(t.count, 0, 2000, items.length), subtotal: int(t.subtotal, 0, 10000000, 0), cal: int(t.cal, 0, 1000000, 0), protein: int(t.protein, 0, 100000, 0), carbs: int(t.carbs, 0, 100000, 0), fat: int(t.fat, 0, 100000, 0) },
+      pay: { method: one(py.method, ["dd", "swipe", "card"], "dd"), swipes: int(py.swipes, 0, 10000, 0), dd: int(py.dd, 0, 10000000, 0), card: int(py.card, 0, 10000000, 0) },
+      wyr: one(o.wyr, ["plan", "pocket", "no"], null) };
+  }).filter(Boolean);
+  s.outbox = arr(src.outbox, 200).filter(ev => ev && typeof ev === "object" && typeof ev.type === "string");
   return s;
 }
 function loadStored() {
@@ -1673,7 +1709,12 @@ function markSVG(item, size = 56, cls = "mark") {
 function vt(update) {
   if (reducedMotion()) { update(); return null; }
   if (document.startViewTransition) {
-    try { return document.startViewTransition(update); } catch (e) { update(); return null; }
+    try {
+      const t = document.startViewTransition(update);
+      // A newer transition can interrupt this one; that is expected, so keep it out of the error log.
+      for (const k of ["ready", "finished", "updateCallbackDone"]) if (t && t[k] && t[k].catch) t[k].catch(() => {});
+      return t;
+    } catch (e) { update(); return null; }
   }
   update();
   const m = $("main");
@@ -1845,7 +1886,7 @@ function reservedListHTML(prefix) {
   const list = upcomingReserved();
   if (!list.length) return "";
   return `<ul class="rm-list" id="${prefix}-reserved">${list.map(m => `
-    <li><span><span class="rm-when">${esc(fmtDate(dateFromIso(m.date)))}, ${m.period}, ${esc(LOC[m.spot].name)}${m.repeat ? ", every week" : ""}</span>${esc(ITEM[m.item].name)} <span class="num small">${m.disc ? `<s class="muted">${money(ITEM[m.item].price)}</s> ${money(afterDiscount(ITEM[m.item].price, m.disc))} <span class="save-badge">${m.disc}% off</span>` : money(ITEM[m.item].price)}</span></span>
+    <li><span><span class="rm-when">${esc(fmtDate(dateFromIso(m.date)))}, ${m.period === "dinner" ? "dinner" : "lunch"}, ${esc(LOC[m.spot].name)}${m.repeat ? ", every week" : ""}</span>${esc(ITEM[m.item].name)} <span class="num small">${m.disc ? `<s class="muted">${money(ITEM[m.item].price)}</s> ${money(afterDiscount(ITEM[m.item].price, m.disc))} <span class="save-badge">${Number(m.disc) || 0}% off</span>` : money(ITEM[m.item].price)}</span></span>
       <button class="btn-text" type="button" id="${prefix}-cancel-${idSafe(m.key)}" data-action="pm-cancel" data-key="${esc(m.key)}" aria-label="Cancel ${esc(ITEM[m.item].name)} on ${esc(fmtDate(dateFromIso(m.date)))}">Cancel</button></li>`).join("")}</ul>`;
 }
 function capturePledge() {
@@ -1959,7 +2000,13 @@ function submitPledge(form) {
   }
   const lbl = (k, v) => v ? (PLEDGE_Q[k].opts.find(o => o[0] === v) || [, ""])[1] : "";
   let rid;
-  do { rid = "R-" + String(1000 + Math.floor(Math.random() * 9000)); } while (state.reserved.some(m => m.rid === rid));
+  const ridChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  do {
+    let r = "";
+    try { const a = new Uint8Array(8); crypto.getRandomValues(a); for (const b of a) r += ridChars[b % ridChars.length]; }
+    catch (e) { for (let i = 0; i < 8; i++) r += ridChars[Math.floor(Math.random() * ridChars.length)]; }
+    rid = "R-" + r;
+  } while (state.reserved.some(m => m.rid === rid));
   const now = Date.now();
   const disc = planDiscount(meals.length);
   const added = meals.map((m, i) => ({ key: `${rid}-${i + 1}`, rid, date: m.day, period: m.period, item: m.item, spot, repeat: !!draft.repeat, ts: now, cancelled: false, disc }));
@@ -2199,6 +2246,7 @@ function openSheet(id, fromTile) {
   if (art && document.startViewTransition && !reducedMotion()) {
     art.style.viewTransitionName = "item-art";
     const t = document.startViewTransition(doOpen);
+    for (const k of ["ready", "updateCallbackDone"]) if (t && t[k] && t[k].catch) t[k].catch(() => {});
     t.finished.finally(() => { const sa = $("#sheet .sheet-art"); if (sa) sa.style.viewTransitionName = ""; });
   } else {
     doOpen();
@@ -2520,7 +2568,7 @@ function renderOrders() {
         <dt>Paid</dt><dd class="num">${esc(payText(active.pay))}</dd>
       </dl>
       <p class="macro num">${esc(macroLine(active.totals))}</p>
-      <div><button class="btn btn-quiet" type="button" id="again-${active.no}" data-action="order-again" data-no="${esc(active.no)}">Order again</button></div>
+      <div><button class="btn btn-quiet" type="button" id="again-${idSafe(active.no)}" data-action="order-again" data-no="${esc(active.no)}">Order again</button></div>
     </section>`;
   } else {
     ui.stageSig = "";
@@ -2533,7 +2581,7 @@ function renderOrders() {
         <div class="h-meta"><span class="num">${esc(o.no)}</span>, ${esc(fmtDate(new Date(o.ts)))}, ${esc(fmtTime(new Date(o.ts)))}. ${esc(orderWhere(o))}.</div>
         <div class="h-items">${esc(itemsSummary(o))}</div>
         <div class="h-meta"><span class="num">${esc(macroLine(o.totals))}</span><br>Paid <span class="num">${esc(payText(o.pay))}</span>${o.wyr ? `. Would place it for real: ${esc(WYR[o.wyr])}` : ""}</div>
-        <div class="h-actions"><span class="sticker">${money(o.totals.subtotal)}</span><button class="btn btn-quiet btn-sm" type="button" id="again-${o.no}" data-action="order-again" data-no="${esc(o.no)}">Order again</button></div>
+        <div class="h-actions"><span class="sticker">${money(o.totals.subtotal)}</span><button class="btn btn-quiet btn-sm" type="button" id="again-${idSafe(o.no)}" data-action="order-again" data-no="${esc(o.no)}">Order again</button></div>
       </li>`).join("")}</ul></section>`;
   }
   main.innerHTML = html;
@@ -2543,7 +2591,7 @@ function renderOrders() {
       <div><span class="small muted">Meal swipes left</span><span class="num" id="wallet-swipes">${state.wallet.swipes}</span></div>
     </div>
     <p class="hint">Pretend balances for trying checkout. Dining Dollars and meal swipes are planned, pending campus dining approval. Card (demo) orders don't touch these.</p>
-    <button class="btn btn-quiet" type="button" id="reset-demo" data-action="reset">Reset demo</button>`;
+    <button class="btn btn-quiet" type="button" id="reset-demo" data-action="reset">Clear my info and reset demo</button>`;
 }
 function tickOrders() {
   if (ui.view !== "orders") return;
@@ -2651,13 +2699,16 @@ document.addEventListener("click", e => {
     case "reset": openDialog($("#confirm-dialog"), $("#confirm-no")); break;
     case "confirm-no": closeDialog($("#confirm-dialog")); break;
     case "confirm-yes":
+      flushOutbox();
       state.wallet = { dd: START_DD, swipes: START_SWIPES };
-      state.orders = [];
+      state.orders = []; state.cart = []; state.reserved = []; state.signup = null;
+      state.details = { ...defaults().details };
+      ui.signupDraft = {}; ui.signupErrors = {}; ui.signupEditing = false;
       save();
       closeDialog($("#confirm-dialog"));
-      renderOrders();
+      renderCartBits(); renderSignup(); renderOrders();
       $("#orders-title").focus();
-      announce("Demo reset. $150.00 Dining Dollars and 10 swipes restored.");
+      announce("Cleared. Your orders, reserved meals list, name, room and email are removed from this browser.");
       break;
     case "theme": state.theme = v; save(); applyTheme(); break;
     case "pledge-edit": ui.signupEditing = true; ui.signupDraft = { pay: state.signup && state.signup.pay, max: state.signup && state.signup.max, get: state.signup && state.signup.get }; renderSignup(); $("#pm-day-0").focus(); break;
