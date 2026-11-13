@@ -383,6 +383,7 @@ h1:focus { outline: none; }
 .macro { font-size: 12.5px; color: var(--muted); }
 .tile-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 12px 12px 16px; min-height: 58px; }
 .tile-foot .kind { font-size: 13px; color: var(--muted); }
+.tile-price, .promo-short, .filters-toggle { display: none; }
 .add-round { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--leaf); color: var(--leaf-ink); display: grid; place-items: center; transition: transform .18s var(--spring), box-shadow .18s var(--ease); }
 .add-round:hover { transform: scale(1.06); box-shadow: var(--shadow-sm); }
 .add-round:active { transform: scale(.94); }
@@ -551,7 +552,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
   .grid-items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 }
 @media (max-width: 720px) {
-  :root { --hh: 56px; }
+  :root { --hh: 52px; }
   .site-header { top: 8px; margin-top: 8px; padding: 0 8px; }
   .main-nav, .site-header .cart-btn { display: none; }
   .site-header .wrap { justify-content: space-between; }
@@ -570,7 +571,42 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
   .tabbar .count-badge { position: absolute; top: 4px; left: calc(50% + 6px); min-width: 18px; height: 18px; font-size: 11px; padding: 0 4px; }
   body { padding-bottom: 84px; }
   .toast { bottom: 96px; }
-  .view-head h1, .menu-head h1 { font-size: 36px; }
+  .view-head h1 { font-size: 36px; }
+  .menu-head h1 { font-size: 28px; }
+  .menu-head { padding: 14px 0 4px; gap: 12px; }
+  /* Solid bars on phones: see-through bars let the page show through and looked cluttered. */
+  .site-header .wrap, .orderbar-pill, .tabbar { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .site-header .wrap { box-shadow: var(--shadow-sm); }
+  .promo-strip { padding: 8px 12px; font-size: 14px; width: 100%; }
+  .promo-long { display: none; }
+  .promo-short { display: inline; }
+  .filters-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 46px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-weight: 500; font-size: 15px; color: var(--ink); text-align: left; }
+  .filters-toggle > span:first-of-type { flex: 1; }
+  .filters-toggle[aria-expanded="true"] { border-color: var(--ink); }
+  .filters-toggle .count-badge { position: static; }
+  .filters { display: none; }
+  .filters.open { display: grid; }
+  .result-meta { font-size: 13px; }
+  #menu-period-hint { display: none; }
+  /* The bottom bar already handles navigation on phones, so the top bar scrolls away and only the pickup bar stays. */
+  .site-header { position: static; }
+  .orderbar { top: 0; padding: 8px 0; background: var(--paper); }
+  .hero { padding-top: 32px; padding-bottom: 40px; gap: 24px; }
+  .hero-sub { font-size: 17px; }
+  .hero-more { display: none; }
+  .offer { padding: 14px; gap: 10px; }
+  .offer-big { font-size: 22px; }
+  .offer-sub { display: none; }
+  .tier { padding: 6px 2px; }
+  .tier b { font-size: 15px; }
+  .card.signup { padding: 18px 16px; }
+  .btn, .select, .input { min-height: 46px; }
+  .chip-opt { min-height: 44px; }
+  .wordmark { min-height: 44px; justify-content: center; }
+  .promo-strip a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 4px; }
+  .promo-strip { padding: 4px 12px; }
+  .result-meta { margin: 2px 0 0; }
+  .menu-head h1 { font-size: 26px; }
   .hero-sub { font-size: 18px; }
   .orderbar { top: calc(var(--hh) + 14px); }
   .orderbar-pill { padding: 0 14px; border-radius: 16px; }
@@ -608,15 +644,29 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
   .history .h-actions { grid-row: auto; grid-column: 1; justify-items: start; grid-auto-flow: column; align-items: center; }
 }
 @media (max-width: 519px) {
-  .grid-items { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .tile-main { flex-direction: row; align-items: stretch; }
-  .tile-art { width: 108px; flex: none; aspect-ratio: 1 / 1; margin: 8px; align-self: start; }
-  .tile-art .art { width: 90%; }
-  .tile-art .sticker { bottom: 6px; left: 6px; font-size: 13px; }
-  .tile-body { padding: 12px 12px 0 4px; gap: 5px; }
-  .tile-body .tags { display: none; }
-  .item-name { font-size: 17px; }
-  .tile-foot { padding: 0 10px 10px 124px; min-height: 52px; margin-top: -6px; }
+  /* Phone menu: one compact row per dish (picture, name, macros, price, add) so three to four fit on a screen. */
+  .grid-items { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .tile { flex-direction: row; align-items: center; }
+  .tile:hover { transform: none; }
+  .tile-main { flex-direction: row; align-items: center; flex: 1; min-width: 0; border-radius: var(--r-card); }
+  .tile-art { width: 84px; flex: none; aspect-ratio: 1 / 1; margin: 8px 12px 8px 8px; border-radius: 12px; }
+  .tile-art .art { width: 96%; }
+  .tile-art .sticker { display: none; }
+  .tile-body { padding: 8px 0; gap: 4px; min-width: 0; }
+  .tile-body .tags, .tile-body .item-desc, .macro-x { display: none; }
+  .item-name { font-size: 16px; line-height: 1.2; }
+  .macro { font-size: 12px; }
+  .tile-price { display: inline-block; width: max-content; font-size: 13px; color: var(--zest-ink); background: var(--zest); padding: 2px 7px; border-radius: 5px; margin-top: 2px; }
+  .tile-foot { padding: 0 10px 0 8px; min-height: 0; margin: 0; flex: none; }
+  .tile-foot .kind { display: none; }
+  .tile-foot .stepper button { width: 38px; }
+  .tile-foot .stepper output { min-width: 22px; }
+  .section-head { margin-top: 10px; }
+}
+/* Short screens (a phone held sideways): nothing sticks to the top, or the bars would cover most of the page. */
+@media (max-height: 560px) {
+  .site-header, .orderbar { position: static; }
+  .sheet { max-height: 96dvh; }
 }
 @media (max-width: 420px) {
   .hero h1 { font-size: 40px; }
@@ -731,7 +781,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
         <div class="hero-copy">
           <p class="eyebrow">Healthy bowls and wraps, pre-ordered</p>
           <h1 id="home-title" tabindex="-1"><span style="display:block">Know what's in it.</span> <span style="display:block">Grab it and go.</span></h1>
-          <p class="hero-sub">High-protein bowls and wraps from locally sourced ingredients. Built for Dining Dollars and meal swipes. Pre-order, then pick up on campus or get it delivered to your dorm.</p>
+          <p class="hero-sub">High-protein bowls and wraps from locally sourced ingredients. Built for Dining Dollars and meal swipes.<span class="hero-more"> Pre-order, then pick up on campus or get it delivered to your dorm.</span></p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#menu" id="hero-order">Order now</a>
             <a class="btn btn-secondary" href="#menu" id="hero-menu">See the menu</a>
@@ -842,7 +892,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
   <div class="wrap">
     <div class="menu-head">
       <h1 id="menu-title" tabindex="-1">Menu</h1>
-      <p class="promo-strip" id="menu-promo"><span>Plan meals ahead and take 5% off your whole order for each one, up to 30% off.</span><a href="#home" id="menu-promo-link" data-action="goto-pledge">Plan my meals</a></p>
+      <p class="promo-strip" id="menu-promo"><span class="promo-long">Plan meals ahead and take 5% off your whole order for each one, up to 30% off.</span><span class="promo-short">Plan ahead, save up to 30%.</span><a href="#home" id="menu-promo-link" data-action="goto-pledge">Plan my meals</a></p>
       <div class="meal-tabs" role="group" aria-label="Meal" id="meal-tabs">
         <span class="tab-ind" id="tab-ind" aria-hidden="true"></span>
         <button type="button" id="tab-lunch" data-action="tab" data-value="lunch" aria-pressed="true"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-sun"></use></svg>Lunch</button>
@@ -850,7 +900,8 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
         <button type="button" id="tab-sides" data-action="tab" data-value="sides" aria-pressed="false">Sides</button>
         <button type="button" id="tab-drinks" data-action="tab" data-value="drinks" aria-pressed="false">Drinks</button>
       </div>
-      <div class="filters">
+      <button class="filters-toggle" type="button" id="filters-toggle" data-action="toggle-filters" aria-expanded="false" aria-controls="menu-filters"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-search"></use></svg><span>Search, sort and filter</span><span class="count-badge" id="filters-count" hidden>0</span></button>
+      <div class="filters" id="menu-filters">
         <div class="field">
           <label for="menu-search">Search</label>
           <div class="search">
@@ -2085,7 +2136,8 @@ function cardHTML(it, i, settle) {
       <span class="tile-body">
         <span class="item-name">${esc(it.name)}</span>
         ${it.desc ? `<span class="item-desc">${esc(it.desc)}</span>` : ""}
-        <span class="macro num">${it.cal} cal · ${it.protein}g protein · ${it.carbs}g carbs</span>
+        <span class="macro num">${it.cal} cal · ${it.protein}g protein<span class="macro-x"> · ${it.carbs}g carbs</span></span>
+        <span class="tile-price num">${money(it.price)}</span>
         ${it.tags.length ? `<span class="tags">${it.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</span>` : ""}
       </span>
     </button>
@@ -2097,6 +2149,10 @@ function renderMenu() {
   renderDietChips();
   $("#menu-sort").value = ui.sort;
   if ($("#menu-search").value !== ui.q) $("#menu-search").value = ui.q;
+  const nFilt = ui.diets.size + (ui.q.trim() ? 1 : 0) + (ui.sort !== "menu" ? 1 : 0);
+  const fc = $("#filters-count"); fc.hidden = !nFilt; fc.textContent = String(nFilt);
+  $("#filters-toggle").setAttribute("aria-expanded", String(!!ui.filtersOpen));
+  $("#menu-filters").classList.toggle("open", !!ui.filtersOpen);
   const settle = ui.lastTab !== ui.tab && !reducedMotion();
   ui.lastTab = ui.tab;
   const base = tabItems(ui.tab);
@@ -2716,6 +2772,7 @@ document.addEventListener("click", e => {
     case "pm-add": capturePledge(); if (ui.signupDraft.meals.length < MAX_PLAN) ui.signupDraft.meals.push(blankMeal(ui.signupDraft.meals[ui.signupDraft.meals.length - 1])); ui.signupErrors = {}; renderSignup(); $(`#pm-day-${ui.signupDraft.meals.length - 1}`).focus(); break;
     case "pm-remove": capturePledge(); ui.signupDraft.meals.splice(Number(t.dataset.i), 1); ui.signupErrors = {}; renderSignup(); $("#pm-add").focus(); break;
     case "pm-cancel": cancelReserved(t.dataset.key); break;
+    case "toggle-filters": ui.filtersOpen = !ui.filtersOpen; t.setAttribute("aria-expanded", String(ui.filtersOpen)); $("#menu-filters").classList.toggle("open", ui.filtersOpen); if (ui.filtersOpen) $("#menu-search").focus(); break;
     case "goto-pledge": ui.scrollTo = "pledge"; if (location.hash === "#home") { e.preventDefault(); route(false); } break;
   }
 });
