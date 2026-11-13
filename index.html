@@ -800,7 +800,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
 
   <div class="band panel" id="pledge">
     <section class="wrap" aria-labelledby="signup-title">
-      <div class="card signup" id="signup"></div>
+      <div class="card signup" id="signup" data-clarity-mask="true"></div>
     </section>
   </div>
 </section>
@@ -877,7 +877,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
       <p class="muted prose">Orders are saved on this device only.</p>
     </div>
     <div class="orders-grid">
-      <div id="orders-main" style="display:grid;gap:24px"></div>
+      <div id="orders-main" data-clarity-mask="true" style="display:grid;gap:24px"></div>
       <aside class="card wallet" id="wallet" aria-labelledby="wallet-title"></aside>
     </div>
   </div>
@@ -955,6 +955,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
       <span class="wordmark" aria-hidden="true" style="font-size:20px;width:max-content">Grab n' Go</span>
       <p>Grab n' Go is a student venture concept created by Kaitlyn Michael and Team 2 for an entrepreneurship course. It is not affiliated with or endorsed by Coastal Carolina University or its dining services. This site is a demo: no orders are fulfilled and no payments are taken. Nutrition values are targets for concept recipes.</p>
       <p id="privacy-note" hidden>To plan our launch, this site records anonymous visits, clicks and demo order activity. Your email is collected only if you submit the reservation form, and names and room numbers never leave your device.</p>
+      <p id="clarity-note" hidden>We use Microsoft Clarity to see how the site is used, through click maps and replays of visits, so we can improve it. Anything you type is hidden from those replays. Turn on Do Not Track in your browser to opt out. See the <a href="https://privacy.microsoft.com/privacystatement">Microsoft Privacy Statement</a>.</p>
     </div>
     <div class="theme-ctl">
       <span class="label" id="theme-label">Theme</span>
@@ -986,7 +987,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
     <button class="icon-btn" type="button" data-action="close-drawer" id="drawer-close" aria-label="Close order"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
   </div>
   <ol class="stepbar" id="drawer-steps" aria-label="Checkout steps"></ol>
-  <div class="drawer-body" id="drawer-body"></div>
+  <div class="drawer-body" id="drawer-body" data-clarity-mask="true"></div>
   <div class="drawer-foot" id="drawer-foot"></div>
 </dialog>
 
@@ -1001,6 +1002,8 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
 
 <script>
 const TALLY_FORM_URL = "";
+// Microsoft Clarity project ID (heatmaps and visit replays). Leave empty to keep Clarity off.
+const CLARITY_ID = "";
 // Paste your Google Apps Script web app URL here to send responses to your Google Sheet.
 const DATA_ENDPOINT = "https://script.google.com/macros/s/AKfycbxPqkX_66T9tm1tgfDMSREufLKv2qUvMN-JqZx9MdMtnw6e-lD8FNu7jCrpuVexPtzP/exec";
 
@@ -1252,6 +1255,23 @@ async function flushOutbox() {
   flushing = false;
 }
 window.addEventListener("online", flushOutbox);
+
+/* Microsoft Clarity: loads only when an ID is set and the visitor has not asked not to be tracked.
+   Typed text is masked (see data-clarity-mask on the forms); we tag the session with the same
+   anonymous visitor ID the Sheet uses, never an email. */
+function clarityEvent(name) { try { if (window.clarity) window.clarity("event", name); } catch (e) { /* ignore */ } }
+function startClarity() {
+  if (!CLARITY_ID || optedOut() || window.clarity) return;
+  try {
+    (function (c, l, a, r, i, t, y) {
+      c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+      t = l.createElement(r); t.async = 1; t.src = "https://www.clarity.ms/tag/" + i;
+      y = l.getElementsByTagName(r)[0]; y.parentNode.insertBefore(t, y);
+    })(window, document, "clarity", "script", CLARITY_ID);
+    if (!state.vid) { state.vid = newId(); save(); }
+    window.clarity("set", "visitor_id", state.vid);
+  } catch (e) { /* blocked: the site works without it */ }
+}
 
 const ui = {
   view: "home",
@@ -1843,6 +1863,7 @@ function submitPledge(form) {
     track("reserved_meal", { meal_id: m.key, reservation: rid, date: m.date, day: DAY_NAMES[dateFromIso(m.date).getDay()], meal: m.period === "lunch" ? "Lunch" : "Dinner",
       item: ITEM[m.item].name, price: (ITEM[m.item].price / 100).toFixed(2), discount: disc + "%", price_after: (afterDiscount(ITEM[m.item].price, disc) / 100).toFixed(2), spot: LOC[m.spot].name, repeat: m.repeat ? "Yes" : "No", status: "Reserved" }, { explicit: true });
   }
+  clarityEvent(added.length ? "reserved_meals" : "reservation_no_meals");
   announce(added.length ? `${plural(added.length, "meal")} reserved at ${disc}% off.` : "Answers saved.");
   const msg = $("#signup-msg"); if (msg) { msg.tabIndex = -1; msg.focus(); }
 }
@@ -2327,6 +2348,7 @@ function placeOrder() {
     state.wallet.swipes -= p.swipes;
   }
   state.orders.unshift(order);
+  clarityEvent("demo_order");
   track("order", {
     order: no, items: itemsSummary(order), count: t.count, total: (t.subtotal / 100).toFixed(2),
     pay: PAY_LABEL[p.method], swipes: p.method === "card" ? 0 : p.swipes, dining_dollars: p.method === "card" ? "0.00" : (p.dd / 100).toFixed(2),
@@ -2587,6 +2609,8 @@ function start(data) {
   renderCartBits();
   route(false);
   const pn = $("#privacy-note"); if (pn) pn.hidden = !DATA_ENDPOINT;
+  const cn = $("#clarity-note"); if (cn) cn.hidden = !CLARITY_ID;
+  startClarity();
   flushOutbox();
   if (!booted) {
     booted = true;
