@@ -713,7 +713,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
   </div>
 </header>
 
-<main id="main">
+<main id="main" data-clarity-unmask="true">
 <!-- HOME -->
 <section class="view" data-view="home" aria-labelledby="home-title">
   <div class="scene-wrap">
@@ -855,7 +855,7 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
           <label for="menu-search">Search</label>
           <div class="search">
             <svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg>
-            <input class="input" type="search" id="menu-search" maxlength="60" placeholder="Salmon, quinoa, avocado" autocomplete="off">
+            <input class="input" type="search" id="menu-search" maxlength="60" data-clarity-mask="true" placeholder="Salmon, quinoa, avocado" autocomplete="off">
           </div>
         </div>
         <div class="sort">
