@@ -1554,18 +1554,20 @@ const leaves = (seed, n, cols) => scatter(seed, n, 60, 60, 34, 34, (x, y, r, k) 
 /* ---- containers ---- */
 const bowl = (base, texture, toppings) => `<ellipse cx="60" cy="67" rx="53" ry="50" fill="#000" fill-opacity=".12"/><circle cx="60" cy="60" r="55" fill="${CERAMIC}"/><circle cx="60" cy="60" r="55" fill="url(#g-rim)"/><circle cx="60" cy="60" r="47" fill="${base}"/>${texture}<g transform="translate(60 60) scale(1.17) translate(-60 -60)">${toppings}</g><circle cx="60" cy="60" r="47" fill="url(#g-inner)"/><circle cx="60" cy="60" r="54.3" fill="none" stroke="#000" stroke-opacity=".06" stroke-width="1.4"/>`;
 const dish = (base, inner) => `<ellipse cx="60" cy="71" rx="53" ry="40" fill="#000" fill-opacity=".12"/><ellipse cx="60" cy="62" rx="55" ry="43" fill="${CERAMIC}"/><ellipse cx="60" cy="62" rx="55" ry="43" fill="url(#g-rim)"/><ellipse cx="60" cy="62" rx="45" ry="34" fill="${base}"/><g transform="translate(60 62) scale(1.12) translate(-60 -62)">${inner}</g><ellipse cx="60" cy="62" rx="45" ry="34" fill="url(#g-inner)"/>`;
-// A wrap cut in two, in a paper band. face(): the fillings seen on the cut end, drawn around (0,0) inside an 8 x 14 ellipse.
+// A wrap cut in two: plain rolled tortilla with a tucked end and grill marks. face(): the fillings seen on the
+// cut end, drawn around (0,0) inside an 8.6 x 14.2 ellipse (scaled up when placed).
 function wrap(face, extras = "") {
   const half = (x, y, r) => `<g transform="translate(${x} ${y}) rotate(${r})">
-    <rect x="-40" y="-18" width="78" height="36" rx="18" fill="${FC.tortilla}"/>
-    <rect x="-40" y="-18" width="78" height="36" rx="18" fill="url(#g-glass)"/>
-    <ellipse cx="-4" cy="-9" rx="5" ry="2" fill="${FC.tortillaD}" opacity=".5"/><ellipse cx="12" cy="8" rx="6" ry="2.2" fill="${FC.tortillaD}" opacity=".45"/><ellipse cx="18" cy="-6" rx="3" ry="1.4" fill="${FC.tortillaD}" opacity=".45"/>
-    <path d="M-40 0A18 18 0 0 1-22-18H-6V18H-22A18 18 0 0 1-40 0Z" fill="#FFFDF8"/><path d="M-40 0A18 18 0 0 1-22-18H-6V18H-22A18 18 0 0 1-40 0Z" fill="url(#g-glass)"/><path d="M-30-14Q-26 0-31 14" stroke="#000" stroke-opacity=".07" stroke-width="1.2" fill="none"/>
-    <path d="M-12-18H-6V18H-12Z" fill="#1B7A4B"/><path d="M-17-18H-15V18H-17Z" fill="#1B7A4B" opacity=".35"/>
-    <ellipse cx="36" cy="0" rx="12" ry="18" fill="${FC.tortillaD}"/><ellipse cx="36.5" cy="0" rx="10.4" ry="16.2" fill="${FC.tortillaL}"/>
-    <g transform="translate(36.8 0)">${face}</g>
+    <path d="M-34-19H34V19H-34Q-44 19-44 0Q-44-19-34-19Z" fill="${FC.tortilla}"/>
+    <path d="M-34-19H34V19H-34Q-44 19-44 0Q-44-19-34-19Z" fill="url(#g-glass)"/>
+    <path d="M-34 8H34V19H-34Q-41 19-43 8Z" fill="${FC.tortillaD}" opacity=".22"/>
+    <path d="M-37-13Q-31 0-37 13" fill="none" stroke="${FC.tortillaD}" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>
+    <path d="M-31-16Q-26 0-31 16" fill="none" stroke="${FC.tortillaD}" stroke-width="1.2" stroke-linecap="round" opacity=".45"/>
+    <path d="M-18-12L-10 11M-6-12L2 11M6-12L14 11" stroke="${FC.grill}" stroke-width="2.2" stroke-linecap="round" opacity=".28"/>
+    <ellipse cx="34" cy="0" rx="13.4" ry="19" fill="${FC.tortillaD}"/><ellipse cx="34.6" cy="0" rx="11.8" ry="17.4" fill="${FC.tortillaL}"/>
+    <g transform="translate(35 0) scale(1.14)">${face}</g>
   </g>`;
-  return `<ellipse cx="60" cy="103" rx="46" ry="8" fill="#000" fill-opacity=".12"/>${half(52, 44, -22)}${half(62, 80, -14)}${extras}`;
+  return `<ellipse cx="60" cy="104" rx="46" ry="7.5" fill="#000" fill-opacity=".12"/>${half(52, 45, -20)}${half(62, 80, -12)}${extras}`;
 }
 const faceBase = col => `<ellipse rx="8.6" ry="14.2" fill="${col}"/>`;
 const glass = (liquid, inside, front = "", level = 34) => `<ellipse cx="60" cy="111" rx="27" ry="5" fill="#000" fill-opacity=".13"/>
