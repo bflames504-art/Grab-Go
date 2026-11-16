@@ -743,6 +743,15 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
 .rm-list li { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: space-between; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 15px; }
 .rm-list .rm-when { font-family: var(--font-num); font-size: 13px; color: var(--muted); display: block; }
 @media (max-width: 640px) { .pm-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .pm-row .pm-item { grid-column: 1 / -1; grid-row: 2; } }
+
+/* About us video card (links to the Canva walkthrough) */
+.video-card { position: relative; display: block; width: 100%; max-width: 960px; margin: 24px auto 0; aspect-ratio: 16 / 9; border-radius: var(--r-card); overflow: hidden; border: 1px solid var(--line); text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
+.video-card:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
+.video-card:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+.video-card svg { display: block; width: 100%; height: 100%; }
+.video-card .vc-cap { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 18px 16px; color: #fff; font-weight: 600; font-size: clamp(16px, 2.6vw, 22px); background: linear-gradient(to top, rgba(18,40,18,.82), rgba(18,40,18,0)); }
+.video-card .vc-play { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
+.video-card .vc-play svg { width: 16px; height: 16px; margin-left: 3px; }
 </style>
 </head>
 <body>
@@ -829,6 +838,47 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
     <div class="mq-row" id="mq-1"></div>
     <div class="mq-row rev" id="mq-2"></div>
   </section>
+
+  <div class="band">
+    <section class="wrap" aria-labelledby="video-title">
+      <p class="eyebrow">Our story</p>
+      <h2 class="section-title" id="video-title">About us</h2>
+      <a class="video-card" href="https://www.canva.com/design/DAHbCS4GfHo/PfkMZEihiL_Z7Ckr0VPGeQ/watch?utm_content=DAHbCS4GfHo&amp;utm_campaign=designshare&amp;utm_medium=embeds&amp;utm_source=link" target="_blank" rel="noopener">
+        <svg viewBox="0 0 640 360" preserveAspectRatio="xMidYMid slice" role="img" aria-label="A bowl of healthy food with greens, rice, grilled chicken, avocado, tomatoes and broccoli" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="vc-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eaf5e2"/><stop offset="1" stop-color="#cde7c1"/></linearGradient></defs>
+          <rect width="640" height="360" fill="url(#vc-bg)"/>
+          <ellipse cx="320" cy="318" rx="215" ry="16" fill="#000" opacity=".12"/>
+          <path d="M126 188 Q126 322 320 322 Q514 322 514 188 Z" fill="#fffdf7" stroke="#d8cfbd" stroke-width="3"/>
+          <ellipse cx="320" cy="188" rx="194" ry="44" fill="#fffdf7" stroke="#d8cfbd" stroke-width="3"/>
+          <ellipse cx="320" cy="190" rx="176" ry="36" fill="#6aa94f"/>
+          <ellipse cx="205" cy="178" rx="36" ry="13" fill="#7cc062" transform="rotate(-22 205 178)"/>
+          <ellipse cx="440" cy="176" rx="36" ry="13" fill="#5f9f48" transform="rotate(24 440 176)"/>
+          <ellipse cx="330" cy="205" rx="40" ry="11" fill="#7cc062" transform="rotate(8 330 205)"/>
+          <ellipse cx="238" cy="166" rx="58" ry="28" fill="#faf5e6"/>
+          <g fill="#e9e1c8"><circle cx="215" cy="160" r="3"/><circle cx="240" cy="154" r="3"/><circle cx="262" cy="164" r="3"/><circle cx="228" cy="174" r="3"/><circle cx="252" cy="176" r="3"/></g>
+          <g transform="translate(300 128)">
+            <rect x="-4" y="14" width="10" height="26" rx="4" fill="#8bc16f"/>
+            <circle cx="-8" cy="8" r="17" fill="#2f7d3a"/><circle cx="10" cy="4" r="19" fill="#38904a"/><circle cx="26" cy="12" r="15" fill="#2f7d3a"/><circle cx="6" cy="-6" r="14" fill="#3f9a50"/>
+          </g>
+          <g>
+            <rect x="338" y="150" width="76" height="30" rx="14" fill="#c98f55" transform="rotate(-12 376 165)"/>
+            <rect x="334" y="164" width="76" height="30" rx="14" fill="#d9a066" transform="rotate(6 372 179)"/>
+            <g stroke="#8a5a2b" stroke-width="3" stroke-linecap="round" opacity=".55"><path d="M352 162l14-4M372 160l14-4M392 158l12-3"/><path d="M350 178l14 3M370 181l14 3M390 184l12 2"/></g>
+          </g>
+          <g>
+            <ellipse cx="452" cy="156" rx="26" ry="14" fill="#b9d86c" transform="rotate(-30 452 156)"/><ellipse cx="452" cy="156" rx="19" ry="9" fill="#e6efb1" transform="rotate(-30 452 156)"/>
+            <ellipse cx="470" cy="176" rx="26" ry="14" fill="#b9d86c" transform="rotate(-8 470 176)"/><ellipse cx="470" cy="176" rx="19" ry="9" fill="#e6efb1" transform="rotate(-8 470 176)"/>
+          </g>
+          <g><circle cx="190" cy="196" r="15" fill="#e5483a"/><circle cx="185" cy="191" r="4" fill="#fff" opacity=".5"/>
+             <circle cx="285" cy="200" r="14" fill="#e5483a"/><circle cx="280" cy="195" r="4" fill="#fff" opacity=".5"/>
+             <circle cx="410" cy="204" r="14" fill="#e5483a"/><circle cx="405" cy="199" r="4" fill="#fff" opacity=".5"/></g>
+          <g fill="#f2c744"><circle cx="350" cy="198" r="5"/><circle cx="362" cy="204" r="5"/><circle cx="342" cy="208" r="5"/><circle cx="372" cy="196" r="5"/></g>
+          <path d="M126 188 Q320 270 514 188 L514 200 Q320 284 126 200 Z" fill="#fffdf7" stroke="#d8cfbd" stroke-width="3"/>
+        </svg>
+        <span class="vc-cap"><span class="vc-play" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2 1l13 7-13 7z" fill="#2f7d3a"/></svg></span>Click here for About Us<span class="sr-only"> (opens the Product Walkthrough Video in a new tab)</span></span>
+      </a>
+    </section>
+  </div>
 
   <div class="band panel">
     <section class="wrap" aria-labelledby="spots-title">
