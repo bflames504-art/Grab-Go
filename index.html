@@ -483,6 +483,31 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
 .confirm[open] { display: grid; gap: 14px; animation: sheet-in .3s var(--spring); }
 .confirm h2 { font-size: 24px; }
 
+/* plan-ahead pop-up shown after a demo order */
+.plan-pop { width: min(460px, calc(100% - 32px)); background: var(--surface); border-radius: var(--r-card); padding: 0; border: 1px solid var(--line); box-shadow: var(--shadow-lg); overflow: hidden; }
+.plan-pop[open] { display: grid; animation: sheet-in .35s var(--spring); }
+.pp-top { background: var(--zest); color: var(--zest-ink); padding: 22px 24px 18px; display: grid; gap: 8px; position: relative; }
+.pp-top .eyebrow { color: var(--zest-ink); opacity: .75; }
+.pp-top h2 { font-size: 26px; letter-spacing: -0.035em; }
+.pp-top .icon-btn { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,.6); border-color: transparent; color: var(--zest-ink); }
+.pp-body { padding: 18px 24px 22px; display: grid; gap: 14px; }
+.pp-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pp-compare > div { background: var(--panel); border-radius: 12px; padding: 10px 14px; display: grid; gap: 2px; }
+.pp-compare .lbl { font-size: 13px; color: var(--muted); }
+.pp-compare .num { font-size: 22px; }
+.pp-compare .was .num { text-decoration: line-through; color: var(--muted); }
+.pp-compare .now { box-shadow: inset 0 0 0 2px var(--leaf); }
+.pp-compare .now .num { color: var(--leaf); }
+.pp-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 15px; }
+.pp-points li { display: flex; gap: 8px; align-items: flex-start; }
+.pp-points .ic { color: var(--leaf); margin-top: 2px; }
+.pp-actions { display: grid; gap: 4px; }
+@media (max-width: 720px) {
+  .plan-pop { width: 100%; max-width: none; margin: auto 0 0; border-radius: 20px 20px 0 0; }
+  .plan-pop[open] { animation: sheet-up .4s var(--spring); }
+  .pp-top h2 { font-size: 23px; }
+}
+
 /* ---------- orders ---------- */
 .orders-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .order-card { padding: 24px; display: grid; gap: 16px; box-shadow: var(--shadow-sm); }
@@ -1056,6 +1081,8 @@ dialog::backdrop { background: rgb(10 14 12 / .42); -webkit-backdrop-filter: blu
     <button class="btn btn-primary" type="button" id="confirm-yes" data-action="confirm-yes">Clear and reset</button>
   </div>
 </dialog>
+
+<dialog class="plan-pop" id="plan-pop" role="dialog" aria-modal="true" aria-labelledby="pp-title" aria-describedby="pp-desc"></dialog>
 
 <script>
 const TALLY_FORM_URL = "";
@@ -2508,6 +2535,7 @@ function renderDrawer() {
       <dt>Total</dt><dd class="num">${money(o.totals.subtotal)}</dd>
     </dl>
     <p class="notice notice-info">This is a demo order. Nothing was charged and no food is being made.</p>
+    ${upcomingReserved().length || TALLY_FORM_URL ? "" : `<p class="promo-strip" id="done-plan"><span>Want it for real? Plan your meals ahead and save up to 30%.</span><button class="btn btn-primary btn-sm" type="button" id="done-plan-go" data-action="plan-go">Plan my meals</button></p>`}
     ${wyrHTML(o)}`;
   foot.innerHTML = `<div class="foot-row"><button class="btn btn-quiet" type="button" id="done-close" data-action="close-drawer">Close</button>
     <a class="btn btn-primary" href="#orders" id="track-order" data-action="close-drawer">Track order</a></div>`;
@@ -2580,6 +2608,92 @@ function placeOrder() {
   if (ui.view === "orders") renderOrders();
   gotoStep("done");
   announce(`Order ${no} placed.`);
+  schedulePlanPopup(order);
+}
+
+/* ================= plan-ahead pop-up =================
+   Demo orders were replacing reservations, so after each demo order we invite the
+   customer to plan the same meals ahead (the reservation form), pre-filled with what they just ordered. */
+const PLAN_POP_DELAY = 1400;   // ms: long enough to see the order number first
+function orderEntrees(o) {
+  const list = [];
+  for (const l of o.items) {
+    const it = ITEM[l.id];
+    if (!it || !it.entree) continue;
+    for (let q = 0; q < l.qty && list.length < 6; q++) list.push(it);
+  }
+  return list;
+}
+function schedulePlanPopup(o) {
+  clearTimeout(ui.planTimer);
+  ui.planOrderNo = o.no;
+  if (TALLY_FORM_URL) return;                 // reservation lives on an outside form
+  if (upcomingReserved().length) return;      // already planning meals: don't nag
+  ui.planTimer = setTimeout(() => openPlanPopup(), PLAN_POP_DELAY);
+}
+function openPlanPopup() {
+  const o = state.orders.find(x => x.no === ui.planOrderNo);
+  if (!o) return;
+  const ent = orderEntrees(o);
+  const n = Math.max(1, ent.length);
+  const fullPct = PLAN_CAP, fullPrice = afterDiscount(o.totals.subtotal, fullPct);
+  const names = [...new Set(ent.map(it => it.name))];
+  const nameText = names.length ? (names.length > 2 ? `${names.slice(0, 2).join(", ")} and more` : names.join(" and ")) : "";
+  $("#plan-pop").innerHTML = `
+    <div class="pp-top">
+      <p class="eyebrow">Order ${esc(o.no)} placed</p>
+      <h2 id="pp-title">Plan your meals ahead and save up to 30%</h2>
+      <button class="icon-btn" type="button" id="pp-close" data-action="plan-later" aria-label="Close">${ic("x")}</button>
+    </div>
+    <div class="pp-body">
+      <p id="pp-desc">That was a demo order. To actually get Grab n' Go when we launch, reserve your meals for the week. Each meal you plan takes 5% off the whole order.</p>
+      <div class="pp-compare" role="group" aria-label="What this order would cost">
+        <div class="was"><span class="lbl">This order today</span><span class="num">${money(o.totals.subtotal)}</span></div>
+        <div class="now"><span class="lbl">Planned ahead, 6+ meals</span><span class="num">${money(fullPrice)}</span></div>
+      </div>
+      <ul class="pp-points">
+        ${nameText ? `<li>${ic("check", "ic-sm")}<span>We'll copy ${esc(nameText)} into your plan, so you just pick the days.</span></li>` : `<li>${ic("check", "ic-sm")}<span>Pick a bowl or wrap for each day you want one.</span></li>`}
+        <li>${ic("check", "ic-sm")}<span>Takes about a minute. Nothing is charged, and you can cancel any meal.</span></li>
+      </ul>
+      <div class="pp-actions">
+        <button class="btn btn-add btn-block" type="button" id="pp-go" data-action="plan-go">Plan my meals${ent.length ? `, ${planDiscount(n)}% off to start` : ""}</button>
+        <button class="btn-text" type="button" id="pp-later" data-action="plan-later">Maybe later</button>
+      </div>
+    </div>`;
+  openDialog($("#plan-pop"), $("#pp-go"));
+  clarityEvent("plan_popup_shown");
+  track("activity", { action: "plan popup shown", detail: o.no });
+}
+function prefillPlanFromOrder(o) {
+  const ent = orderEntrees(o);
+  const spot = LOC[o.location] ? o.location : state.location;
+  const draft = ui.signupDraft;
+  if (ent.length) {
+    const days = planDays(), used = new Set();
+    draft.meals = ent.map(it => {
+      const period = it.period === "dinner" ? "dinner" : "lunch";
+      const d = days.find(x => !used.has(x.iso + period) && LOC[spot][period][x.dow]) || days.find(x => !used.has(x.iso + period)) || days[0];
+      used.add(d.iso + period);
+      return { day: d.iso, period, item: it.id };
+    });
+  }
+  draft.spot = spot;
+  if (!draft.get) draft.get = o.fulfil;
+  if (!draft.pay && ["dd", "swipe", "card"].includes(o.pay.method)) draft.pay = o.pay.method;
+  if (draft.email == null && state.signup) draft.email = state.signup.email;
+  ui.signupErrors = {};
+  if (state.signup) ui.signupEditing = true;
+}
+function goPlanFromPopup() {
+  const o = state.orders.find(x => x.no === ui.planOrderNo);
+  // Don't hand focus back to the checkout; the reservation form takes it.
+  for (const d of [$("#plan-pop"), $("#drawer")]) { returnFocus.delete(d); closeDialog(d); }
+  if (o) prefillPlanFromOrder(o);
+  renderSignup();
+  clarityEvent("plan_popup_accepted");
+  track("activity", { action: "plan popup accepted", detail: o ? o.no : "" });
+  ui.scrollTo = "pledge";
+  if (location.hash === "#home") route(false); else location.hash = "#home";
 }
 
 /* ================= orders ================= */
@@ -2751,6 +2865,12 @@ document.addEventListener("click", e => {
       if (o) { o.wyr = v; save(); withFocus(renderDrawer); track("order_intent", { order: o.no, answer: WYR[v] }, { now: true }); }
       break;
     }
+    case "plan-go": goPlanFromPopup(); break;
+    case "plan-later":
+      closeDialog($("#plan-pop"));
+      clarityEvent("plan_popup_dismissed");
+      track("activity", { action: "plan popup dismissed", detail: ui.planOrderNo || "" });
+      break;
     case "order-again": orderAgain(t.dataset.no); break;
     case "reset": openDialog($("#confirm-dialog"), $("#confirm-no")); break;
     case "confirm-no": closeDialog($("#confirm-dialog")); break;
@@ -2815,6 +2935,7 @@ window.addEventListener("storage", e => {
 setupDialog($("#sheet"));
 setupDialog($("#drawer"), () => { if (ui.step === "done") ui.step = "cart"; });
 setupDialog($("#confirm-dialog"));
+setupDialog($("#plan-pop"));
 
 /* ================= boot ================= */
 let booted = false;
